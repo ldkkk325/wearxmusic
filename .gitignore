@@ -1,0 +1,18 @@
+# Gradle / Android build output. The first commit of this repository tracked all of it —
+# 1950 files and ~284 MB — which is why the history here starts from a clean tree instead.
+.gradle/
+.kotlin/
+build/
+app/build/
+local.properties
+
+# Signed deliverables are release artefacts, not source. They change every build and belong in a
+# GitHub Release rather than in the history.
+*.apk
+*.idsig
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+captures/

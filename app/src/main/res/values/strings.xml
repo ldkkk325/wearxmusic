@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WearX Music</string>
+
+    <string name="library_title">音乐库</string>
+    <string name="now_playing_title">正在播放</string>
+    <string name="now_playing_progress">%1$s / %2$s</string>
+
+    <string name="tab_albums">专辑</string>
+    <string name="tab_tracks">单曲</string>
+
+    <string name="empty_library">未找到本地音乐\n请先把音乐文件传输到手表</string>
+    <string name="empty_library_hint">若已放入 Music 目录，可点下面重新扫描</string>
+    <string name="action_rescan">重新扫描音乐</string>
+    <string name="rescanning">正在扫描…</string>
+    <string name="loading">正在扫描音乐库…</string>
+
+    <string name="permission_title">需要读取音频权限</string>
+    <string name="permission_rationale">WearX Music 需要访问手表上的音频文件，才能建立音乐库并播放。</string>
+    <string name="permission_grant">授予权限</string>
+    <string name="permission_denied">权限被拒绝，无法扫描音乐库。</string>
+
+    <string name="action_play">播放</string>
+    <string name="action_pause">暂停</string>
+    <string name="action_next">下一首</string>
+    <string name="action_previous">上一首</string>
+    <string name="action_shuffle">随机播放</string>
+    <string name="action_repeat">循环模式</string>
+    <string name="action_back">返回</string>
+    <string name="action_mute">静音</string>
+    <string name="action_unmute">取消静音</string>
+
+    <string name="label_unknown_artist">未知艺术家</string>
+    <string name="label_unknown_album">未知专辑</string>
+    <string name="label_track_count">%1$d 首</string>
+    <string name="label_track_number">第 %1$d 首</string>
+
+    <string name="repeat_off">顺序播放</string>
+    <string name="repeat_all">列表循环</string>
+    <string name="repeat_one">单曲循环</string>
+
+    <string name="mode_shuffle">随机播放</string>
+    <string name="mode_repeat_all">列表循环</string>
+    <string name="mode_repeat_one">单曲循环</string>
+
+    <!-- 导航 -->
+    <string name="nav_volume">音量</string>
+    <string name="nav_settings">设置</string>
+    <string name="nav_lyrics">歌词</string>
+
+    <!-- 音量页 -->
+    <string name="volume_title">音量</string>
+    <string name="volume_percent">%1$d%%</string>
+    <string name="volume_stream_media">媒体音量</string>
+    <string name="volume_muted">已静音</string>
+
+    <!-- 设置页 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_reduce_motion">减少动画</string>
+    <string name="settings_reduce_motion_hint">关闭波浪进度、封面翻转与列表入场动画</string>
+    <!-- 更多页 -->
+    <string name="more_title">更多</string>
+    <string name="nav_more">更多</string>
+    <string name="more_seek">跳转</string>
+    <string name="more_seek_back">快退 10 秒</string>
+    <string name="more_seek_forward">快进 10 秒</string>
+    <string name="more_mode">播放模式</string>
+    <string name="more_mode_value">当前：%1$s</string>
+    <string name="repeat_off_state">不循环</string>
+    <string name="settings_dynamic_color">动态取色</string>
+    <string name="settings_dynamic_color_hint">控件颜色跟随当前封面</string>
+    <string name="settings_ui_scale">界面缩放</string>
+    <string name="settings_ui_scale_hint">整体放大或缩小界面元素</string>
+    <string name="settings_scale_down">缩小界面</string>
+    <string name="settings_scale_up">放大界面</string>
+    <string name="settings_state_on">当前：开</string>
+    <string name="settings_state_off">当前：关</string>
+    <string name="settings_switch_on">开启</string>
+    <string name="settings_switch_off">关闭</string>
+    <string name="settings_ui_scale_value">当前：%1$s（%2$d%%）</string>
+    <string name="settings_current">当前：%1$s</string>
+    <string name="ui_scale_small">小</string>
+    <string name="ui_scale_normal">标准</string>
+    <string name="ui_scale_large">大</string>
+    <string name="ui_scale_xlarge">特大</string>
+    <string name="settings_on">开</string>
+    <string name="settings_off">关</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">WearX Music v%1$s</string>
+    <string name="settings_about_hint">本地音乐播放器 · Material 3 Expressive</string>
+
+    <!-- 歌词页 -->
+    <string name="lyrics_title">歌词</string>
+    <string name="lyrics_empty">未找到歌词</string>
+    <string name="lyrics_empty_hint">可在音频文件内嵌歌词，或放一个同名的 .lrc 文件到音乐同目录</string>
+    <string name="lyrics_no_track">当前没有播放中的歌曲</string>
+    <string name="lyrics_loading">正在读取歌词…</string>
+    <string name="lyrics_untimed">无时间轴歌词</string>
+</resources>
