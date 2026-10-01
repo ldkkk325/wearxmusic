@@ -1,7 +1,18 @@
+import java.util.Properties
+
 plugins {
     // AGP 9 ships built-in Kotlin support, so `org.jetbrains.kotlin.android` must NOT be applied.
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// The release signing key is deliberately NOT in this repository. `keystore.properties` sits in the
+// project root, is gitignored, and points at a .jks kept outside the tree. When it is absent — a
+// fresh clone, CI, any other machine — the release build is simply left unsigned instead of failing,
+// and can be signed afterwards by hand.
+val keystoreProperties = Properties().apply {
+    val file = rootProject.file("keystore.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
 }
 
 android {
@@ -17,11 +28,28 @@ android {
         vectorDrawables { useSupportLibrary = true }
     }
 
+    signingConfigs {
+        // Registered only when there is a key to register, so `findByName` below returns null on a
+        // machine without one rather than the build dying on a missing file.
+        if (keystoreProperties.getProperty("storeFile") != null) {
+            create("release") {
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                // v3 as well as v2: it costs nothing here and it is what makes a future key
+                // rotation possible without every installed copy being orphaned.
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
         }
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(
