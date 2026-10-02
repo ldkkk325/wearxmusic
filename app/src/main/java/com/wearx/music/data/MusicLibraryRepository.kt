@@ -8,11 +8,11 @@ import android.net.Uri
 import android.provider.MediaStore
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * Read-only view over the device's local audio.
@@ -29,6 +29,22 @@ import java.util.concurrent.TimeUnit
  * filesystem walk is what actually guarantees the songs show up.
  */
 class MusicLibraryRepository(private val context: Context) {
+
+    /**
+     * Per-file results that survive a reload.
+     *
+     * `MediaMetadataRetriever.setDataSource` is not cheap, and [loadLibrary] runs again on every
+     * permission change and every rescan, so re-opening every file each time is pure waste on a
+     * watch. Both caches are keyed by something that changes when the underlying file does, so an
+     * edited or replaced track is still re-read.
+     */
+    private val parsedFiles = mutableMapOf<String, ParsedTrack>()
+
+    /** `File.canonicalPath` costs a syscall per call; the paths do not change between reloads. */
+    private val canonicalPaths = mutableMapOf<String, String>()
+
+    /** A parsed file plus the file state it was parsed from, so staleness is detectable. */
+    private class ParsedTrack(val stamp: String, val track: Track)
 
     suspend fun loadLibrary(): List<Album> = withContext(Dispatchers.IO) {
         val fromStore = queryMediaStore()
@@ -48,11 +64,20 @@ class MusicLibraryRepository(private val context: Context) {
         val paths = collectAudioFiles().map { it.absolutePath }
         if (paths.isEmpty()) return@withContext 0
 
-        val latch = CountDownLatch(paths.size)
+        val scanned = CompletableDeferred<Unit>()
+        var remaining = paths.size
         MediaScannerConnection.scanFile(context, paths.toTypedArray(), null) { _, _ ->
-            latch.countDown()
+            // Only files the scanner actually indexed report back, so a file that is already in
+            // MediaStore may never call in — which is why this waits on a timeout rather than on a
+            // counter reaching zero.
+            if (--remaining == 0) scanned.complete(Unit)
         }
-        latch.await(SCAN_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+
+        // Suspending instead of `CountDownLatch.await`. The old version parked the calling IO
+        // THREAD for the whole timeout, and since the timer only expires when the scanner goes
+        // quiet, that was up to twelve seconds in which every other IO caller — library loads,
+        // Coil decoding artwork — queued behind it.
+        withTimeoutOrNull(SCAN_TIMEOUT_MILLIS) { scanned.await() }
         paths.size
     }
 
@@ -131,6 +156,10 @@ class MusicLibraryRepository(private val context: Context) {
     }
 
     private fun readTrack(file: File): Track? {
+        // Cheap staleness check: if the file has not moved, the parse from last time still holds.
+        val stamp = "${file.lastModified()}:${file.length()}"
+        parsedFiles[file.absolutePath]?.takeIf { it.stamp == stamp }?.let { return it.track }
+
         val retriever = MediaMetadataRetriever()
         return runCatching {
             retriever.setDataSource(file.absolutePath)
@@ -161,7 +190,13 @@ class MusicLibraryRepository(private val context: Context) {
                 path = file.absolutePath,
                 artUri = artwork,
             )
-        }.getOrNull().also { runCatching { retriever.release() } }
+        }.getOrNull().also {
+            runCatching { retriever.release() }
+            if (it != null) {
+                if (parsedFiles.size >= PARSED_CACHE_SIZE) parsedFiles.clear()
+                parsedFiles[file.absolutePath] = ParsedTrack(stamp, it)
+            }
+        }
     }
 
     private fun MediaMetadataRetriever.string(key: Int): String? =
@@ -200,8 +235,13 @@ class MusicLibraryRepository(private val context: Context) {
         .sortedWith(compareBy({ it.title.lowercase() }, { it.artist.lowercase() }))
 
     /** Resolves `/sdcard/...` and `/storage/emulated/0/...` to one identity so nothing is listed twice. */
-    private fun identity(path: String): String =
-        runCatching { File(path).canonicalPath }.getOrDefault(path)
+    private fun identity(path: String): String {
+        canonicalPaths[path]?.let { return it }
+        val resolved = runCatching { File(path).canonicalPath }.getOrDefault(path)
+        if (canonicalPaths.size >= CANONICAL_CACHE_SIZE) canonicalPaths.clear()
+        canonicalPaths[path] = resolved
+        return resolved
+    }
 
     /** Ringtones / notifications / alarms / Android internals are not part of the music library. */
     private fun isSystemSoundPath(path: String?): Boolean {
@@ -210,7 +250,15 @@ class MusicLibraryRepository(private val context: Context) {
     }
 
     private companion object {
-        const val SCAN_TIMEOUT_SECONDS = 12L
+        /**
+         * How long to wait for the scanner before reloading anyway. The scan itself continues in the
+         * background either way, so this only decides when the UI stops saying "rescanning"; the
+         * old twelve seconds was long enough to look like a freeze.
+         */
+        const val SCAN_TIMEOUT_MILLIS = 3_000L
+
+        const val PARSED_CACHE_SIZE = 512
+        const val CANONICAL_CACHE_SIZE = 2_048
 
         val MUSIC_ROOTS = listOf(
             "/storage/emulated/0/Music",
