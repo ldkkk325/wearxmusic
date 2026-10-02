@@ -22,12 +22,11 @@ private val BlurRadius = 40.dp
 private const val ScrimAlphaDark = 0.62f
 
 /**
- * Heavier in light mode. The scrim's job is to hold `onSurface` text legible over a blurred cover,
- * and in light mode that text is dark — so the scrim has to push the cover further towards the
- * light background than the dark-mode value does. The same 0.62 leaves a dark cover showing through
- * and dark text on it is unreadable.
+ * A little heavier in light mode: the scrim holds dark `onSurface` text over a blurred cover, so
+ * light mode needs slightly more of it than dark mode needs for light text. Only slightly — pushed
+ * to 0.82 it stopped being a backdrop and became a grey wash, with the cover barely showing through.
  */
-private const val ScrimAlphaLight = 0.82f
+private const val ScrimAlphaLight = 0.70f
 
 /**
  * Full-screen blurred copy of the current cover, dimmed so text stays legible.

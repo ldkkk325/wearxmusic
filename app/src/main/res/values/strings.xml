@@ -89,7 +89,11 @@
     <string name="settings_morph_blur_value">当前：%1$s</string>
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
-    <string name="settings_theme_mode">外观</string>
+    <string name="settings_group_appearance">外观</string>
+    <string name="settings_group_motion">动效</string>
+    <string name="settings_group_playback">播放</string>
+    <string name="settings_group_about">关于</string>
+    <string name="settings_theme_mode">主题</string>
     <string name="settings_theme_mode_hint">深色、浅色，或跟随手表</string>
     <string name="settings_theme_mode_value">当前：%1$s</string>
     <string name="theme_system">跟随系统</string>
