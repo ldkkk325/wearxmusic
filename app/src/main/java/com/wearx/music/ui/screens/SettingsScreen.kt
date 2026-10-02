@@ -179,16 +179,22 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    // Wear M3's own Stepper, which is three parts in one (decrease, value, increase)
-                    // rather than the two-button group this used to be. On a 227 dp dial the saving
-                    // matters, and it is the component the platform's own settings use.
+                    // Wear M3's own Stepper — decrease, value, increase in one, instead of the
+                    // two-button group this used to be. On a 227 dp dial the saving matters.
+                    //
+                    // The Int overload with an explicit progression, deliberately. The Float overload
+                    // derives its step as `(max - min) / (steps + 1)`, so `steps = 3` over 0..3 gave
+                    // a step of 0.75 and stops at 0 / 0.75 / 1.5 / 2.25 / 3 — and because a value
+                    // sitting between stops is coerced WITHOUT calling `onValueChange`, the default
+                    // 100% (index 1) was on no stop at all and the control did nothing when tapped.
                     Stepper(
-                        value = scaleIndex.toFloat(),
+                        value = scaleIndex,
                         onValueChange = { index ->
-                            onUiScaleChange(scales[index.toInt().coerceIn(scales.indices)])
+                            onUiScaleChange(scales[index.coerceIn(scales.indices)])
                         },
-                        steps = scales.size - 1,
-                        valueRange = 0f..(scales.size - 1).toFloat(),
+                        // An IntRange IS an IntProgression, and saying so with `until` avoids the
+                        // ambiguity of the two-argument IntProgression factory.
+                        valueProgression = 0..scales.lastIndex,
                         decreaseIcon = {
                             Icon(
                                 imageVector = Icons.Filled.Remove,

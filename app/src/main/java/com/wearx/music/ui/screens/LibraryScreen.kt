@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,10 +54,13 @@ import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.RevealValue
 import androidx.wear.compose.material3.SwipeToReveal
 import androidx.wear.compose.material3.SwipeToRevealDefaults
+import androidx.wear.compose.material3.rememberRevealState
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
+import kotlinx.coroutines.launch
 import com.wearx.music.data.SortMode
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
@@ -382,16 +386,35 @@ private fun TrackRow(
     onClick: () -> Unit,
     onPlayNext: () -> Unit,
 ) {
+    val revealState = rememberRevealState()
+    val revealScope = rememberCoroutineScope()
+    // The component's own contract: with a partially-revealed state allowed, the APP has to put the
+    // state back to Covered. Without this the row stays parked half-swiped with its content pushed
+    // aside, which is what made a track look like it had vanished and left a hole in the list.
+    // `animateTo` suspends, so the action's click has to launch it rather than call it directly.
+    fun closeReveal() {
+        revealScope.launch { revealState.animateTo(RevealValue.Covered) }
+    }
+
     SwipeToReveal(
         primaryAction = {
             PrimaryActionButton(
-                onClick = onPlayNext,
+                onClick = {
+                    closeReveal()
+                    onPlayNext()
+                },
                 icon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null) },
                 text = { Text(stringResource(R.string.action_play_next), maxLines = 1) },
                 modifier = Modifier.height(SwipeToRevealDefaults.LargeActionButtonHeight),
             )
         },
-        onSwipePrimaryAction = onPlayNext,
+        // Both entry points close the row: a full swipe is a different code path inside the
+        // component and leaves it revealed too, so resetting only the button would fix half of it.
+        onSwipePrimaryAction = {
+            closeReveal()
+            onPlayNext()
+        },
+        revealState = revealState,
         // Full swipe fires the same action as tapping the revealed button, as the component expects.
         modifier = Modifier.fillMaxWidth(),
     ) {
