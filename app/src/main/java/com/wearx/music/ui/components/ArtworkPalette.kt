@@ -30,6 +30,8 @@ import kotlinx.coroutines.withContext
  * keeps the seed's hue but assigns each role its own tone, which is why the result stays harmonious
  * no matter how garish the cover is.
  *
+ * The same generator serves light mode: pass `isDark = false`.
+ *
  * The seed is read from the **original, un-blurred** artwork (the blur is a rendering-only effect on
  * the backdrop); decoding the sharp image keeps the quantiser from averaging distinct hues together.
  *
@@ -53,11 +55,17 @@ fun rememberArtworkSeedColor(artUri: Uri?): Color? {
     return seed
 }
 
-/** Rebuilds [base] as a dark **Tonal Spot** scheme derived from [seed]. */
-fun tonalSpotScheme(base: ColorScheme, seed: Color): ColorScheme {
+/**
+ * Rebuilds [base] as a **Tonal Spot** scheme derived from [seed], light or dark.
+ *
+ * The [isDark] flag is the only thing that decides the mode — every role comes from the generator,
+ * so a light scheme is the same derivation with a different tone mapping rather than a second
+ * hand-tuned palette that could drift away from this one.
+ */
+fun tonalSpotScheme(base: ColorScheme, seed: Color, isDark: Boolean = true): ColorScheme {
     val scheme = SchemeTonalSpot(
         Hct.fromInt(seed.toArgb()),
-        /* isDark = */ true,
+        isDark,
         /* contrastLevel = */ 0.0,
     )
 
@@ -84,10 +92,11 @@ fun tonalSpotScheme(base: ColorScheme, seed: Color): ColorScheme {
         onSurfaceVariant = Color(scheme.onSurfaceVariant),
         outline = Color(scheme.outline),
         outlineVariant = Color(scheme.outlineVariant),
-        // Tonal Spot's background is a *tinted* near-black; the page background is forced to pure
-        // black instead. The surface containers keep their tint — that is what gives the controls
-        // their colour and their hierarchy.
-        background = Color.Black,
+        // Dark mode forces the page background to pure black rather than Tonal Spot's tinted
+        // near-black; the surface containers keep their tint, which is what gives the controls their
+        // colour and their hierarchy. Light mode takes the generated background as-is — a forced
+        // white would lose the tint that makes the light scheme belong to the artwork.
+        background = if (isDark) Color.Black else Color(scheme.background),
         onBackground = Color(scheme.onBackground),
         error = Color(scheme.error),
         errorDim = Color(scheme.error),

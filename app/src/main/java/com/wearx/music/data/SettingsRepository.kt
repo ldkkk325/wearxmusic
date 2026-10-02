@@ -6,6 +6,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
+ * Which way the app's palette faces.
+ *
+ * [SYSTEM] follows the watch. [DARK] stays the default, so adding a light scheme cannot change how
+ * the app looks for anyone who does not go looking for it.
+ */
+enum class ThemeMode { SYSTEM, DARK, LIGHT }
+
+/**
  * How a freshly started queue should play.
  *
  * Shuffle is folded in with the repeat modes instead of being a separate switch: on a watch the
@@ -45,6 +53,8 @@ data class AppSettings(
      * page snap mid-growth when the transition ended underneath it.
      */
     val transitionDurationIndex: Int = DEFAULT_TRANSITION_DURATION_INDEX,
+    /** Dark, light, or the watch's own setting. */
+    val themeMode: ThemeMode = ThemeMode.DARK,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
@@ -94,6 +104,11 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setThemeMode(value: ThemeMode) {
+        prefs.edit().putString(KEY_THEME_MODE, value.name).apply()
+        _settings.value = read()
+    }
+
     fun setTransitionDurationIndex(value: Int) {
         prefs.edit()
             .putInt(KEY_TRANSITION_DURATION, value.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices))
@@ -123,6 +138,10 @@ class SettingsRepository(context: Context) {
             KEY_TRANSITION_DURATION,
             AppSettings.DEFAULT_TRANSITION_DURATION_INDEX,
         ).coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices),
+        // By name with a fallback, so a stored name that no longer exists cannot crash startup.
+        themeMode = prefs.getString(KEY_THEME_MODE, null)
+            ?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
+            ?: ThemeMode.DARK,
     )
 
     private companion object {
@@ -132,5 +151,6 @@ class SettingsRepository(context: Context) {
         const val KEY_PLAYBACK_MODE = "playback_mode"
         const val KEY_MORPH_BLUR = "morph_blur"
         const val KEY_TRANSITION_DURATION = "transition_duration"
+        const val KEY_THEME_MODE = "theme_mode"
     }
 }

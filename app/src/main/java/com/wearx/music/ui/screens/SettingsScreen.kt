@@ -28,6 +28,7 @@ import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.data.AppSettings
+import com.wearx.music.data.ThemeMode
 import com.wearx.music.ui.components.MorphGroupIconButton
 import com.wearx.music.ui.components.NoEdgeFadeScaling
 import kotlin.math.roundToInt
@@ -66,6 +67,7 @@ fun SettingsScreen(
     onUiScaleChange: (Float) -> Unit,
     onMorphBlurChange: (Int) -> Unit,
     onTransitionDurationChange: (Int) -> Unit,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
 ) {
     val scrollState = rememberScalingLazyListState()
@@ -168,6 +170,45 @@ fun SettingsScreen(
                             icon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_switch_off)) },
                         )
                     }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.settings_theme_mode),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_theme_mode_value,
+                            stringResource(
+                                when (settings.themeMode) {
+                                    ThemeMode.SYSTEM -> R.string.theme_system
+                                    ThemeMode.DARK -> R.string.theme_dark
+                                    ThemeMode.LIGHT -> R.string.theme_light
+                                },
+                            ),
+                        ),
+                        style = MaterialTheme.typography.bodyExtraSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_theme_mode_hint),
+                        style = MaterialTheme.typography.bodyExtraSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Slider(
+                        value = settings.themeMode.ordinal,
+                        onValueChange = { index ->
+                            onThemeModeChange(
+                                ThemeMode.entries[index.coerceIn(ThemeMode.entries.indices)],
+                            )
+                        },
+                        valueProgression = 0..ThemeMode.entries.lastIndex,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 

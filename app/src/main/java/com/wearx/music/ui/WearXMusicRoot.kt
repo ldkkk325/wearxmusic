@@ -50,7 +50,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
@@ -72,6 +71,7 @@ import com.wearx.music.WearXMusicApp
 import com.wearx.music.data.Lyrics
 import com.wearx.music.data.AppSettings
 import com.wearx.music.data.SortMode
+import com.wearx.music.data.ThemeMode
 import com.wearx.music.data.sortedBy
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
@@ -358,8 +358,15 @@ fun WearXMusicRoot() {
         animationSpec = tween(ThemeShiftMs, easing = RouteEasing),
         label = "artworkSeed",
     )
-    val colorScheme = remember(baseScheme, animatedSeed) {
-        if (seed == null) baseScheme else tonalSpotScheme(baseScheme, animatedSeed)
+    val darkTheme = when (settings.themeMode) {
+        ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+    }
+    val colorScheme = remember(baseScheme, animatedSeed, darkTheme) {
+        // The artwork tint has to follow the mode as well, or turning on light mode with dynamic
+        // colour would leave every role on its dark tone.
+        if (seed == null) baseScheme else tonalSpotScheme(baseScheme, animatedSeed, isDark = darkTheme)
     }
 
     MaterialTheme(colorScheme = colorScheme) {
@@ -456,6 +463,7 @@ fun WearXMusicRoot() {
                             onUiScaleChange = app.settings::setUiScale,
                             onMorphBlurChange = app.settings::setMorphBlurIndex,
                             onTransitionDurationChange = app.settings::setTransitionDurationIndex,
+                            onThemeModeChange = app.settings::setThemeMode,
                             onDynamicColorChange = app.settings::setDynamicColor,
                         )
                 }
@@ -518,7 +526,11 @@ fun WearXMusicRoot() {
                         .background(MaterialTheme.colorScheme.background),
                 )
 
-                routeTransition.AnimatedContent(
+                // Captured in composition: the gesture scrim has to dim towards whatever the page
+            // background actually is, and `drawWithContent` is not a composable context.
+            val transitionScrim = MaterialTheme.colorScheme.background
+
+            routeTransition.AnimatedContent(
                     modifier = Modifier.fillMaxSize(),
                     transitionSpec = {
                         // `inPredictiveBack` selects the pop spec as well as `navigatingForward`: the
@@ -661,7 +673,10 @@ fun WearXMusicRoot() {
                                     } else {
                                         0f
                                     }
-                                if (alpha > 0f) drawCircle(Color.Black, alpha = alpha)
+                                // Dims toward the page background rather than toward black, so the
+                                // gesture reads as "receding into the background" in light mode too
+                                // — a black scrim there would just look like dirt on the screen.
+                                if (alpha > 0f) drawCircle(transitionScrim, alpha = alpha)
                             },
                     ) {
                         destination(route)

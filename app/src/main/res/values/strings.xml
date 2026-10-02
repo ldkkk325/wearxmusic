@@ -89,6 +89,12 @@
     <string name="settings_morph_blur_value">当前：%1$s</string>
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
+    <string name="settings_theme_mode">外观</string>
+    <string name="settings_theme_mode_hint">深色、浅色，或跟随手表</string>
+    <string name="settings_theme_mode_value">当前：%1$s</string>
+    <string name="theme_system">跟随系统</string>
+    <string name="theme_dark">深色</string>
+    <string name="theme_light">浅色</string>
     <string name="settings_transition_duration">转场时长</string>
     <string name="settings_transition_duration_hint">打开页面与返回的速度</string>
     <string name="settings_transition_duration_value">当前：%1$s（%2$d 毫秒）</string>

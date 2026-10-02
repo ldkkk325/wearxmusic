@@ -8,6 +8,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.dynamicColorScheme
+import com.wearx.music.ui.components.tonalSpotScheme
 
 /**
  * Material 3 Expressive theme for Wear OS.
@@ -18,18 +19,39 @@ import androidx.wear.compose.material3.dynamicColorScheme
  * the Wear Material 3 defaults, which already follow the Expressive design language.
  */
 @Composable
-fun WearXMusicTheme(content: @Composable () -> Unit) {
+fun WearXMusicTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
     val context = LocalContext.current
-    val colorScheme = remember(context) {
+    val colorScheme = remember(context, darkTheme) {
         val dynamic = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             dynamicColorScheme(context)
         } else {
             null
         }
-        dynamic ?: ExpressiveFallbackScheme
+        when {
+            !darkTheme -> LightScheme(dynamic)
+            dynamic != null -> dynamic
+            else -> ExpressiveFallbackScheme
+        }
     }
     MaterialTheme(colorScheme = colorScheme, content = content)
 }
+
+/**
+ * The light scheme.
+ *
+ * Wear's own `dynamicColorScheme` is **dark only** — it reads the `*_container_dark` system
+ * resources and takes no `isDark` argument — so a light scheme cannot simply be asked for. Instead
+ * the wallpaper's accent is used as a SEED and the Tonal Spot generator is run on it with
+ * `isDark = false`, which keeps the wallpaper's hue while mapping every role onto light tones.
+ */
+private fun LightScheme(dynamic: ColorScheme?): ColorScheme = tonalSpotScheme(
+    base = ExpressiveFallbackScheme,
+    seed = dynamic?.primary ?: ExpressiveFallbackSeed,
+    isDark = false,
+)
+
+/** The hue the app falls back to when there is no wallpaper colour to derive one from. */
+private val ExpressiveFallbackSeed = Color(0xFFC9BFFF)
 
 /** Dark, high-chroma fallback used when dynamic colour is unavailable (API 30). */
 private val ExpressiveFallbackScheme = ColorScheme(
