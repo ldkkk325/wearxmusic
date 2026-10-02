@@ -18,7 +18,7 @@ class WearXMusicApp : Application(), SingletonImageLoader.Factory {
 
     val library: MusicLibraryRepository by lazy { MusicLibraryRepository(this) }
 
-    val player: PlayerConnection by lazy { PlayerConnection(this) }
+    val player: PlayerConnection by lazy { PlayerConnection(this, settings) }
 
     val settings: SettingsRepository by lazy { SettingsRepository(this) }
 

@@ -11,6 +11,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.wearx.music.data.PlaybackMode
+import com.wearx.music.data.SettingsRepository
 import com.wearx.music.data.albumArtUri
 import com.wearx.music.data.model.Track
 import kotlinx.coroutines.CoroutineScope
@@ -32,7 +33,10 @@ import kotlinx.coroutines.launch
  * a single [StateFlow] that Compose collects, and the current position is polled because Media3
  * does not push continuous position updates.
  */
-class PlayerConnection(private val context: Context) {
+class PlayerConnection(
+    private val context: Context,
+    private val settings: SettingsRepository,
+) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val sessionToken =
@@ -61,6 +65,10 @@ class PlayerConnection(private val context: Context) {
                 if (connected == null) return@addListener
                 controller = connected
                 connected.addListener(listener)
+                // Re-apply the remembered mode before anything is published: the player is owned by
+                // the service and starts with Media3's defaults, so without this a restart would
+                // silently drop the user back to repeat-all.
+                connected.applyPlaybackMode(settings.settings.value.playbackMode)
                 publish()
                 startPositionUpdates()
             },
@@ -137,16 +145,18 @@ class PlayerConnection(private val context: Context) {
         publish()
     }
 
-    /** Steps the playback mode 随机 → 列表循环 → 单曲循环 → 随机. */
+    /** Steps the playback mode 随机 → 列表循环 → 单曲循环 → 随机, and remembers the result. */
     fun cyclePlaybackMode() {
         val player = controller ?: return
-        player.applyPlaybackMode(
-            when (player.playbackMode()) {
-                PlaybackMode.SHUFFLE -> PlaybackMode.REPEAT_ALL
-                PlaybackMode.REPEAT_ALL -> PlaybackMode.REPEAT_ONE
-                PlaybackMode.REPEAT_ONE -> PlaybackMode.SHUFFLE
-            },
-        )
+        val next = when (player.playbackMode()) {
+            PlaybackMode.SHUFFLE -> PlaybackMode.REPEAT_ALL
+            PlaybackMode.REPEAT_ALL -> PlaybackMode.REPEAT_ONE
+            PlaybackMode.REPEAT_ONE -> PlaybackMode.SHUFFLE
+        }
+        player.applyPlaybackMode(next)
+        // Stored, not just applied. The player's flags are the effect; this is the record that
+        // survives the player being rebuilt.
+        settings.setPlaybackMode(next)
         publish()
     }
 
@@ -156,13 +166,15 @@ class PlayerConnection(private val context: Context) {
      * The caller passes the **whole library**, not one album, so playback runs on across album
      * boundaries and a repeat mode loops the library rather than a single album.
      */
-    fun playQueue(queue: List<Track>, startIndex: Int, mode: PlaybackMode) {
+    fun playQueue(queue: List<Track>, startIndex: Int) {
         val player = controller ?: return
         val items = queue.map { it.toMediaItem() }
         if (items.isEmpty()) return
         val index = startIndex.coerceIn(0, items.lastIndex)
 
-        player.applyPlaybackMode(mode)
+        // The mode is deliberately NOT set here. It used to be passed in as a constant, so every
+        // new playback reset whatever the user had chosen — the mode belongs to `connect()` and
+        // `cyclePlaybackMode()`, which is also what makes it survive a restart.
 
         // Tapping the track that is already loaded must not restart it from the top — it should
         // just carry on (or resume if paused). Only rebuild the queue when the selection actually

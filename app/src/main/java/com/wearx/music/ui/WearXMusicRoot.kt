@@ -68,7 +68,6 @@ import com.wearx.music.BuildConfig
 import com.wearx.music.R
 import com.wearx.music.WearXMusicApp
 import com.wearx.music.data.Lyrics
-import com.wearx.music.data.PlaybackMode
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.rememberArtworkSeedColor
@@ -187,8 +186,6 @@ fun WearXMusicRoot() {
         }
     }
 
-    val startMode = PlaybackMode.REPEAT_ALL
-
     fun navigate(route: Route) {
         navigatingForward = true
         pushOrigin = lastPress
@@ -205,7 +202,7 @@ fun WearXMusicRoot() {
     fun play(track: Track) {
         val index = libraryQueue.indexOfFirst { it.id == track.id }
         if (index < 0) return
-        app.player.playQueue(libraryQueue, index, startMode)
+        app.player.playQueue(libraryQueue, index)
         navigate(Route.NowPlaying)
     }
 
