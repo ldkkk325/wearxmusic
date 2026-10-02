@@ -51,6 +51,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
@@ -68,6 +70,7 @@ import com.wearx.music.BuildConfig
 import com.wearx.music.R
 import com.wearx.music.WearXMusicApp
 import com.wearx.music.data.Lyrics
+import com.wearx.music.data.AppSettings
 import com.wearx.music.data.SortMode
 import com.wearx.music.data.sortedBy
 import com.wearx.music.data.model.Album
@@ -242,6 +245,11 @@ fun WearXMusicRoot() {
     // Stacking order per route, raised by each push and lowered by each pop. Not snapshot state: it
     // is read and written inside `transitionSpec`, which must not trigger a recomposition.
     val routeZIndices = remember { mutableMapOf<String, Float>() }
+
+    // Opening-page blur, in pixels, from the stored dp.
+    val morphBlurPx = with(LocalDensity.current) {
+        AppSettings.MORPH_BLUR_CHOICES[settings.morphBlurIndex].dp.toPx()
+    }
 
     var backProgress by remember { mutableFloatStateOf(0f) }
     var inPredictiveBack by remember { mutableStateOf(false) }
@@ -439,6 +447,7 @@ fun WearXMusicRoot() {
                             versionName = BuildConfig.VERSION_NAME,
                             onReduceMotionChange = app.settings::setReduceMotion,
                             onUiScaleChange = app.settings::setUiScale,
+                            onMorphBlurChange = app.settings::setMorphBlurIndex,
                             onDynamicColorChange = app.settings::setDynamicColor,
                         )
                 }
@@ -571,6 +580,35 @@ fun WearXMusicRoot() {
                             // outer one, so what gets scaled is already a circle.
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.background)
+                            // The page coming into focus as the container transform runs. Read from
+                            // the TRANSITION's fraction inside the layer block, which is a deferred
+                            // draw-phase read: doing this through `Modifier.blur` would mean reading
+                            // the progress in a modifier argument and recomposing the whole page on
+                            // every frame of the transition.
+                            //
+                            // Only on a push. A pop is driven by the back gesture, and blurring a
+                            // page the finger is still holding reads as lag rather than as focus.
+                            // Assigned unconditionally so a frame that should not blur cannot inherit
+                            // the previous frame's effect.
+                            .graphicsLayer {
+                                val progress = routeTransitionState.fraction
+                                val blur = if (navigatingForward && !inPredictiveBack) {
+                                    morphBlurPx * (1f - progress.coerceIn(0f, 1f))
+                                } else {
+                                    0f
+                                }
+                                // No API-level guard: `RenderEffect` is documented as a no-op below
+                                // Android 12, which is the same deal `Modifier.blur` has.
+                                renderEffect = if (blur > 0.05f) {
+                                    BlurEffect(
+                                        radiusX = blur,
+                                        radiusY = blur,
+                                        edgeTreatment = TileMode.Decal,
+                                    )
+                                } else {
+                                    null
+                                }
+                            }
                             // Drawn rather than recomposed, and as a circle to match the dial. The
                             // two scrim alphas are worked out inside the draw block on purpose:
                             // reading the gesture's progress here is a deferred read, so a moving

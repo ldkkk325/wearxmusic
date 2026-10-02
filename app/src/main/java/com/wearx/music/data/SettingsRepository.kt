@@ -29,9 +29,22 @@ data class AppSettings(
      * process restarts — so the chosen mode has to be stored here and re-applied on connect.
      */
     val playbackMode: PlaybackMode = PlaybackMode.REPEAT_ALL,
+    /**
+     * How blurred the page being opened is at the start of the container transform, in dp. It
+     * resolves to sharp as the page grows to full size. Zero turns the effect off.
+     *
+     * Stored as an index rather than the dp value itself so the setting survives a change to the
+     * scale's spacing, and so a value from a future build cannot land between the offered steps.
+     */
+    val morphBlurIndex: Int = DEFAULT_MORPH_BLUR_INDEX,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
+
+        /** Off, then increasingly blurred. Index 0 means "no blur". */
+        val MORPH_BLUR_CHOICES = listOf(0f, 3f, 6f, 10f)
+
+        const val DEFAULT_MORPH_BLUR_INDEX = 2
     }
 }
 
@@ -66,6 +79,11 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setMorphBlurIndex(value: Int) {
+        prefs.edit().putInt(KEY_MORPH_BLUR, value.coerceIn(AppSettings.MORPH_BLUR_CHOICES.indices)).apply()
+        _settings.value = read()
+    }
+
     private fun read() = AppSettings(
         reduceMotion = prefs.getBoolean(KEY_REDUCE_MOTION, false),
         dynamicColor = prefs.getBoolean(KEY_DYNAMIC_COLOR, true),
@@ -77,6 +95,8 @@ class SettingsRepository(context: Context) {
         playbackMode = prefs.getString(KEY_PLAYBACK_MODE, null)
             ?.let { name -> PlaybackMode.entries.firstOrNull { it.name == name } }
             ?: PlaybackMode.REPEAT_ALL,
+        morphBlurIndex = prefs.getInt(KEY_MORPH_BLUR, AppSettings.DEFAULT_MORPH_BLUR_INDEX)
+            .coerceIn(AppSettings.MORPH_BLUR_CHOICES.indices),
     )
 
     private companion object {
@@ -84,5 +104,6 @@ class SettingsRepository(context: Context) {
         const val KEY_DYNAMIC_COLOR = "dynamic_color"
         const val KEY_UI_SCALE = "ui_scale"
         const val KEY_PLAYBACK_MODE = "playback_mode"
+        const val KEY_MORPH_BLUR = "morph_blur"
     }
 }

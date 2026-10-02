@@ -24,7 +24,7 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
-import androidx.wear.compose.material3.Stepper
+import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.data.AppSettings
@@ -33,6 +33,17 @@ import com.wearx.music.ui.components.NoEdgeFadeScaling
 import kotlin.math.roundToInt
 
 /** Labels for [AppSettings.UI_SCALE_CHOICES], index-aligned. */
+/** Turns the stored blur index into the wording shown under the slider. */
+@Composable
+private fun blurLabel(index: Int): String {
+    val dp = AppSettings.MORPH_BLUR_CHOICES[index]
+    return if (dp <= 0f) {
+        stringResource(R.string.settings_morph_blur_off)
+    } else {
+        "${dp.toInt()} dp"
+    }
+}
+
 private val UI_SCALE_LABELS = listOf(
     R.string.ui_scale_small,
     R.string.ui_scale_normal,
@@ -53,6 +64,7 @@ fun SettingsScreen(
     versionName: String,
     onReduceMotionChange: (Boolean) -> Unit,
     onUiScaleChange: (Float) -> Unit,
+    onMorphBlurChange: (Int) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
 ) {
     val scrollState = rememberScalingLazyListState()
@@ -161,6 +173,40 @@ fun SettingsScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Text(
+                        text = stringResource(R.string.settings_morph_blur),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_morph_blur_value,
+                            blurLabel(settings.morphBlurIndex),
+                        ),
+                        style = MaterialTheme.typography.bodyExtraSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_morph_blur_hint),
+                        style = MaterialTheme.typography.bodyExtraSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    // A Slider, not a Stepper: the Stepper forces its content to fill the available
+                    // space and vanishes when it cannot, whereas a Slider lays out inline and is
+                    // already used on the volume page. The Int overload, because the Float one
+                    // derives its step from `steps` and will not call back for a value that sits
+                    // between two stops.
+                    Slider(
+                        value = settings.morphBlurIndex,
+                        onValueChange = onMorphBlurChange,
+                        valueProgression = 0..AppSettings.MORPH_BLUR_CHOICES.lastIndex,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
                         text = stringResource(R.string.settings_ui_scale),
                         style = MaterialTheme.typography.titleSmall,
                     )
@@ -179,42 +225,40 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    // Wear M3's own Stepper — decrease, value, increase in one, instead of the
-                    // two-button group this used to be. On a 227 dp dial the saving matters.
-                    //
-                    // The Int overload with an explicit progression, deliberately. The Float overload
-                    // derives its step as `(max - min) / (steps + 1)`, so `steps = 3` over 0..3 gave
-                    // a step of 0.75 and stops at 0 / 0.75 / 1.5 / 2.25 / 3 — and because a value
-                    // sitting between stops is coerced WITHOUT calling `onValueChange`, the default
-                    // 100% (index 1) was on no stop at all and the control did nothing when tapped.
-                    Stepper(
-                        value = scaleIndex,
-                        onValueChange = { index ->
-                            onUiScaleChange(scales[index.coerceIn(scales.indices)])
-                        },
-                        // An IntRange IS an IntProgression, and saying so with `until` avoids the
-                        // ambiguity of the two-argument IntProgression factory.
-                        valueProgression = 0..scales.lastIndex,
-                        decreaseIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Remove,
-                                contentDescription = stringResource(R.string.settings_scale_down),
-                            )
-                        },
-                        increaseIcon = {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = stringResource(R.string.settings_scale_up),
-                            )
-                        },
+                    // A plain two-button group, deliberately NOT Wear M3's Stepper. Stepper forces
+                    // its content to fill the available space (`modifier.fillMaxSize()` on the
+                    // Column it builds) because it is designed for a whole screen — drop it into a
+                    // Card inside a list item and the available height resolves to nothing, so the
+                    // three parts collapse and the control is simply not there. Tried and reverted.
+                    ButtonGroup(
                         modifier = Modifier.fillMaxWidth(),
+                        contentPadding = PaddingValues(0.dp),
                     ) {
-                        Text(
-                            text = stringResource(UI_SCALE_LABELS[scaleIndex]),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
+                        MorphGroupIconButton(
+                            onClick = {
+                                onUiScaleChange(scales[(scaleIndex - 1).coerceAtLeast(0)])
+                            },
+                            enabled = scaleIndex > 0,
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Remove,
+                                    contentDescription = stringResource(R.string.settings_scale_down),
+                                )
+                            },
+                        )
+                        MorphGroupIconButton(
+                            onClick = {
+                                onUiScaleChange(
+                                    scales[(scaleIndex + 1).coerceAtMost(scales.lastIndex)],
+                                )
+                            },
+                            enabled = scaleIndex < scales.lastIndex,
+                            icon = {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = stringResource(R.string.settings_scale_up),
+                                )
+                            },
                         )
                     }
                 }

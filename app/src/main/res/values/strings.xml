@@ -86,8 +86,12 @@
     <string name="sort_album">按专辑</string>
     <string name="sort_duration">按时长</string>
     <string name="settings_ui_scale_hint">整体放大或缩小界面元素</string>
+    <string name="settings_morph_blur_value">当前：%1$s</string>
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
+    <string name="settings_morph_blur">圆入模糊</string>
+    <string name="settings_morph_blur_hint">打开页面时从模糊变清晰</string>
+    <string name="settings_morph_blur_off">关闭</string>
     <string name="settings_state_on">当前：开</string>
     <string name="settings_state_off">当前：关</string>
     <string name="settings_switch_on">开启</string>
