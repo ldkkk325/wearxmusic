@@ -580,28 +580,35 @@ fun WearXMusicRoot() {
                             // outer one, so what gets scaled is already a circle.
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.background)
-                            // The page coming into focus as the container transform runs. Read inside
-                            // the layer block, which is a deferred draw-phase read: doing this through
-                            // `Modifier.blur` would mean reading the progress in a modifier argument
-                            // and recomposing the whole page on every frame of the transition.
+                            // DEPTH OF FIELD: the page underneath the incoming one goes out of
+                            // focus as the new circle grows over it. The incoming page is always
+                            // sharp; the outgoing one blurs up to the configured radius and comes
+                            // back as it is uncovered.
                             //
-                            // Only on a push. A pop is driven by the back gesture, and blurring a
-                            // page the finger is still holding reads as lag rather than as focus.
-                            // Assigned unconditionally so a frame that should not blur cannot inherit
-                            // the previous frame's effect.
+                            // Read inside the layer block, which is a deferred draw-phase read:
+                            // through `Modifier.blur` the radius would be a composition-time argument
+                            // and the whole page would recompose on every frame of the transition.
+                            //
+                            // Whether a transition is running is asked as "are the two states
+                            // different", never by testing the fraction: that is a play head and it
+                            // returns to zero when a transition finishes, which is what pinned a
+                            // full-strength blur onto every settled page last time.
                             .graphicsLayer {
-                                // Whether a transition is actually running, NOT what the fraction
-                                // happens to be at rest. The fraction is a play head: it returns to
-                                // zero once a transition finishes, so testing it for "is this a
-                                // push" left the condition permanently true on a settled page and
-                                // every page sat at full blur. The transition is running exactly when
-                                // its two states differ.
-                                val inPush = navigatingForward &&
-                                    !inPredictiveBack &&
-                                    routeTransitionState.currentState != routeTransitionState.targetState &&
-                                    route == routeTransitionState.targetState
-                                val blur = if (inPush) {
-                                    morphBlurPx * (1f - routeTransitionState.fraction.coerceIn(0f, 1f))
+                                val transitioning =
+                                    routeTransitionState.currentState != routeTransitionState.targetState
+                                val pushRunning = transitioning && navigatingForward
+                                val popRunning = transitioning && !navigatingForward && inPredictiveBack
+                                // Only the page being COVERED blurs — never the one being revealed,
+                                // whether that is a push or a gesture-driven back, because blurring a
+                                // page the finger is still holding reads as lag rather than depth.
+                                val isBehind =
+                                    when {
+                                        pushRunning -> route == routeTransitionState.currentState
+                                        popRunning -> route == routeTransitionState.targetState
+                                        else -> false
+                                    }
+                                val blur = if (isBehind) {
+                                    morphBlurPx * routeTransitionState.fraction.coerceIn(0f, 1f)
                                 } else {
                                     0f
                                 }

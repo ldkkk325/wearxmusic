@@ -89,8 +89,8 @@
     <string name="settings_morph_blur_value">当前：%1$s</string>
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
-    <string name="settings_morph_blur">圆入模糊</string>
-    <string name="settings_morph_blur_hint">打开页面时从模糊变清晰</string>
+    <string name="settings_morph_blur">背景模糊</string>
+    <string name="settings_morph_blur_hint">新页面长出来时，下方页面渐渐失焦</string>
     <string name="settings_morph_blur_off">关闭</string>
     <string name="settings_state_on">当前：开</string>
     <string name="settings_state_off">当前：关</string>
