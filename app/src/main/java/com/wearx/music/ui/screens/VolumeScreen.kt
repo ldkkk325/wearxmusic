@@ -40,7 +40,7 @@ import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
-import com.wearx.music.ui.components.BackButtonReservedHeight
+import com.wearx.music.ui.components.BackButtonSpacing
 import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.ScreenBackButton
 import kotlin.math.roundToInt
@@ -169,10 +169,10 @@ fun VolumeScreen(onBack: () -> Unit) {
                 },
             )
 
-            // Leaves the bottom clear for the back button (see ScreenBackButton).
-            Spacer(Modifier.height(BackButtonReservedHeight))
+            Spacer(Modifier.height(BackButtonSpacing))
+            // In the content flow at the end, not floating over it — see ScreenBackButton.
+            ScreenBackButton(onClick = onBack)
         }
-        ScreenBackButton(onClick = onBack)
     }
 }
 
