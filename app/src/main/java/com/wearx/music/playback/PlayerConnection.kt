@@ -189,6 +189,26 @@ class PlayerConnection(
     }
 
     /**
+     * Moves [track] to play straight after the current one, without interrupting what is playing.
+     *
+     * Media3 has no "insert next" verb — the queue is reordered with [Player.moveMediaItem] — so the
+     * track is located by its media id (which is the track id) and shifted one slot forward. Doing
+     * nothing when it is already next keeps a second tap from moving it further away.
+     */
+    fun playNext(track: Track) {
+        val player = controller ?: return
+        val count = player.mediaItemCount
+        if (count <= 1) return
+        val mediaId = track.id.toString()
+        val from = (0 until count).firstOrNull { player.getMediaItemAt(it).mediaId == mediaId }
+            ?: return
+        val to = (player.currentMediaItemIndex + 1).coerceAtMost(count - 1)
+        if (from == to) return
+        player.moveMediaItem(from, to)
+        publish()
+    }
+
+    /**
      * Replaces the queue with [queue] and starts playing at [startIndex].
      *
      * The caller passes the **whole library**, not one album, so playback runs on across album

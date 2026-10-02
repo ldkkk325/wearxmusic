@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
@@ -52,8 +53,11 @@ import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SwipeToReveal
+import androidx.wear.compose.material3.SwipeToRevealDefaults
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
+import com.wearx.music.data.SortMode
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import com.wearx.music.playback.PlayerUiState
@@ -81,6 +85,9 @@ fun LibraryScreen(
     isRescanning: Boolean,
     onAlbumClick: (Album) -> Unit,
     onTrackClick: (Track) -> Unit,
+    onPlayNext: (Track) -> Unit,
+    sortMode: SortMode,
+    onCycleSort: () -> Unit,
     onOpenVolume: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
@@ -109,20 +116,16 @@ fun LibraryScreen(
                 }
             }
 
+            // Two rows, because these are two different kinds of control squeezed into one. Five
+            // across a 227 dp dial is ~42 dp per button, under the 48 dp Wear asks for, and the row
+            // mixed a view-mode toggle (one of which is ALWAYS active) with three plain navigation
+            // buttons (none of which ever is). Splitting them gives every button ~72 dp or more, and
+            // each row now says one thing.
             item {
                 ButtonGroup(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = ButtonGroupDefaults.fullWidthPaddings(),
                 ) {
-                    MorphGroupIconButton(
-                        onClick = onOpenSearch,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = stringResource(R.string.nav_search),
-                            )
-                        },
-                    )
                     MorphGroupIconButton(
                         onClick = { showTracks = true },
                         active = showTracks,
@@ -140,6 +143,35 @@ fun LibraryScreen(
                             Icon(
                                 imageVector = Icons.Filled.Album,
                                 contentDescription = stringResource(R.string.tab_albums),
+                            )
+                        },
+                    )
+                    // A cycling button rather than a picker: the label says which order tapping
+                    // switches TO, so it never needs a dialog, and the row stays three buttons.
+                    MorphGroupIconButton(
+                        onClick = onCycleSort,
+                        active = sortMode != SortMode.TITLE,
+                        icon = {
+                            Icon(
+                                imageVector = sortMode.icon,
+                                contentDescription = stringResource(sortMode.labelRes),
+                            )
+                        },
+                    )
+                }
+            }
+
+            item {
+                ButtonGroup(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = ButtonGroupDefaults.fullWidthPaddings(),
+                ) {
+                    MorphGroupIconButton(
+                        onClick = onOpenSearch,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.nav_search),
                             )
                         },
                     )
@@ -172,6 +204,7 @@ fun LibraryScreen(
                         isCurrent = track.id.toString() == playback.mediaId,
                         isPlaying = playback.isPlaying,
                         onClick = { onTrackClick(track) },
+                        onPlayNext = { onPlayNext(track) },
                     )
                 }
             } else {
@@ -332,8 +365,48 @@ private fun AlbumRow(album: Album, onClick: () -> Unit) {
     }
 }
 
+/**
+ * A library row that reveals a secondary action when swiped right-to-left.
+ *
+ * `SwipeToReveal` is Wear Material 3's own component (new in 1.7) and it is not used anywhere else
+ * in the app, so this is its first use. It is right-to-left on purpose: the library already sits
+ * inside a right-to-left predictive-back transition and the platform reserves the left edge for
+ * swipe-to-dismiss, so the only free direction is this one.
+ */
 @Composable
 private fun TrackRow(
+    track: Track,
+    artUri: Uri?,
+    isCurrent: Boolean,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onPlayNext: () -> Unit,
+) {
+    SwipeToReveal(
+        primaryAction = {
+            PrimaryActionButton(
+                onClick = onPlayNext,
+                icon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null) },
+                text = { Text(stringResource(R.string.action_play_next), maxLines = 1) },
+                modifier = Modifier.height(SwipeToRevealDefaults.LargeActionButtonHeight),
+            )
+        },
+        onSwipePrimaryAction = onPlayNext,
+        // Full swipe fires the same action as tapping the revealed button, as the component expects.
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        TrackRowContent(
+            track = track,
+            artUri = artUri,
+            isCurrent = isCurrent,
+            isPlaying = isPlaying,
+            onClick = onClick,
+        )
+    }
+}
+
+@Composable
+private fun TrackRowContent(
     track: Track,
     artUri: Uri?,
     isCurrent: Boolean,

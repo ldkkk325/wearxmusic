@@ -24,6 +24,7 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.Stepper
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.data.AppSettings
@@ -178,35 +179,36 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Spacer(Modifier.height(6.dp))
-                    ButtonGroup(
+                    // Wear M3's own Stepper, which is three parts in one (decrease, value, increase)
+                    // rather than the two-button group this used to be. On a 227 dp dial the saving
+                    // matters, and it is the component the platform's own settings use.
+                    Stepper(
+                        value = scaleIndex.toFloat(),
+                        onValueChange = { index ->
+                            onUiScaleChange(scales[index.toInt().coerceIn(scales.indices)])
+                        },
+                        steps = scales.size - 1,
+                        valueRange = 0f..(scales.size - 1).toFloat(),
+                        decreaseIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Remove,
+                                contentDescription = stringResource(R.string.settings_scale_down),
+                            )
+                        },
+                        increaseIcon = {
+                            Icon(
+                                imageVector = Icons.Filled.Add,
+                                contentDescription = stringResource(R.string.settings_scale_up),
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth(),
-                        contentPadding = PaddingValues(0.dp),
                     ) {
-                        MorphGroupIconButton(
-                            onClick = {
-                                onUiScaleChange(scales[(scaleIndex - 1).coerceAtLeast(0)])
-                            },
-                            enabled = scaleIndex > 0,
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Filled.Remove,
-                                    contentDescription = stringResource(R.string.settings_scale_down),
-                                )
-                            },
-                        )
-                        MorphGroupIconButton(
-                            onClick = {
-                                onUiScaleChange(
-                                    scales[(scaleIndex + 1).coerceAtMost(scales.lastIndex)],
-                                )
-                            },
-                            enabled = scaleIndex < scales.lastIndex,
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Filled.Add,
-                                    contentDescription = stringResource(R.string.settings_scale_up),
-                                )
-                            },
+                        Text(
+                            text = stringResource(UI_SCALE_LABELS[scaleIndex]),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }

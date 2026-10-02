@@ -68,6 +68,8 @@ import com.wearx.music.BuildConfig
 import com.wearx.music.R
 import com.wearx.music.WearXMusicApp
 import com.wearx.music.data.Lyrics
+import com.wearx.music.data.SortMode
+import com.wearx.music.data.sortedBy
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.rememberArtworkSeedColor
@@ -138,7 +140,9 @@ fun WearXMusicRoot() {
     // One queue for the whole library, in album order, so playback carries on across album
     // boundaries and a repeat mode loops everything rather than a single album.
     val libraryQueue = remember(albums) { albums.flatMap { it.tracks } }
-    val tracks = remember(libraryQueue) { libraryQueue.sortedBy { it.title.lowercase() } }
+    // One ordering for the whole app, so the library and the search results never disagree.
+    var sortMode by rememberSaveable { mutableStateOf(SortMode.TITLE) }
+    val tracks = remember(libraryQueue, sortMode) { libraryQueue.sortedBy(sortMode) }
 
     // Tracks copied onto the watch carry no album id, so their own art Uri is empty; falling back to
     // the containing album's cover is what gives those files a picture at all. Hoisted here so the
@@ -369,6 +373,9 @@ fun WearXMusicRoot() {
                                 onOpenVolume = { navigate(Route.Volume) },
                                 onOpenSettings = { navigate(Route.Settings) },
                                 onOpenSearch = { navigate(Route.Search) },
+                                onPlayNext = { track -> app.player.playNext(track) },
+                                sortMode = sortMode,
+                                onCycleSort = { sortMode = sortMode.next() },
                                 onTogglePlay = app.player::playPause,
                                 onOpenNowPlaying = { navigate(Route.NowPlaying) },
                                 onRescan = {

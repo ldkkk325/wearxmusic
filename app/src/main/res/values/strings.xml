@@ -7,6 +7,9 @@
     <string name="now_playing_progress">%1$s / %2$s</string>
 
     <string name="tab_albums">专辑</string>
+    <string name="action_play_next">下一首播放</string>
+    <string name="action_shuffle_album">随机播放全部</string>
+    <string name="action_open_album">查看专辑</string>
     <string name="tab_tracks">单曲</string>
 
     <string name="search_hint">搜索曲名或艺术家</string>
@@ -77,6 +80,11 @@
     <string name="settings_dynamic_color">动态取色</string>
     <string name="settings_dynamic_color_hint">控件颜色跟随当前封面</string>
     <string name="settings_ui_scale">界面缩放</string>
+    <string name="tab_sort">排序</string>
+    <string name="sort_title">按曲名</string>
+    <string name="sort_artist">按艺术家</string>
+    <string name="sort_album">按专辑</string>
+    <string name="sort_duration">按时长</string>
     <string name="settings_ui_scale_hint">整体放大或缩小界面元素</string>
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
