@@ -9,8 +9,6 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.SeekableTransitionState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.rememberTransition
 import androidx.compose.animation.core.spring
@@ -85,6 +83,7 @@ import com.wearx.music.ui.screens.NowPlayingScreen
 import com.wearx.music.ui.screens.PermissionScreen
 import com.wearx.music.ui.screens.SearchScreen
 import com.wearx.music.ui.screens.SettingsScreen
+import com.wearx.music.ui.screens.SettingsSectionScreen
 import com.wearx.music.ui.screens.VolumeScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -457,14 +456,21 @@ fun WearXMusicRoot() {
                         )
 
                         Route.Settings -> SettingsScreen(
+                            onOpenSection = { section ->
+                                navigate(Route.SettingsSectionPage(section))
+                            },
+                        )
+
+                        is Route.SettingsSectionPage -> SettingsSectionScreen(
+                            section = route.section,
                             settings = settings,
                             versionName = BuildConfig.VERSION_NAME,
                             onReduceMotionChange = app.settings::setReduceMotion,
                             onUiScaleChange = app.settings::setUiScale,
+                            onDynamicColorChange = app.settings::setDynamicColor,
                             onMorphBlurChange = app.settings::setMorphBlurIndex,
                             onTransitionDurationChange = app.settings::setTransitionDurationIndex,
                             onThemeModeChange = app.settings::setThemeMode,
-                            onDynamicColorChange = app.settings::setDynamicColor,
                         )
                 }
             }
@@ -569,7 +575,10 @@ fun WearXMusicRoot() {
                                     reduceMotion -> EnterTransition.None
                                     pop -> routePopEnter(routeTransitionMs)
                                     else -> scaleIn(
-                                        animationSpec = pushSettleSpec(routeTransitionMs),
+                                        animationSpec = tween(
+                                            durationMillis = routeTransitionMs,
+                                            easing = RouteEasing,
+                                        ),
                                         initialScale = pushStartScale,
                                         transformOrigin = TransformOrigin(
                                             pushOrigin?.x ?: 0.5f,
@@ -708,29 +717,6 @@ private fun LoadingIndicator() {
  */
 private val RouteEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
 
-/** Just under critically damped: the page settles with a small overshoot instead of a wobble. */
-private const val SettleDamping = 0.8f
-
-/**
- * The spring the page-opening morph settles on, solved from the chosen duration so the setting
- * still means something.
- *
- * A spring settles in roughly `4 / (dampingRatio * sqrt(stiffness))`, so the stiffness that fills a
- * given duration is `(4 / (zeta * T))^2`. Compose's named stiffnesses do not work here: `Medium` is
- * 1500, which settles in about 130 ms — it would ignore the duration setting entirely and make the
- * push snappier than it was before. Deriving it keeps "很快 / 标准 / 慢 / 很慢" meaningful.
- *
- * At zeta 0.8 the overshoot is about 1.5 % of the travel: enough to read as arriving and settling,
- * not enough to read as a bounce.
- */
-private fun pushSettleSpec(durationMs: Int): SpringSpec<Float> {
-    val seconds = (durationMs / 1000f).coerceAtLeast(0.05f)
-    val angularFrequency = 4f / (SettleDamping * seconds)
-    return spring(
-        dampingRatio = SettleDamping,
-        stiffness = angularFrequency * angularFrequency,
-    )
-}
 /** How long the palette takes to shift to a new track's cover. See the note where it is used. */
 private const val ThemeShiftMs = 320
 

@@ -90,9 +90,13 @@
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
     <string name="settings_group_appearance">外观</string>
+    <string name="settings_group_appearance_summary">主题、取色与界面大小</string>
     <string name="settings_group_motion">动效</string>
+    <string name="settings_group_motion_summary">页面打开方式与动画</string>
     <string name="settings_group_playback">播放</string>
+    <string name="settings_group_playback_summary">暂无可调项，播放相关设置会加在这里</string>
     <string name="settings_group_about">关于</string>
+    <string name="settings_group_about_summary">版本信息</string>
     <string name="settings_theme_mode">主题</string>
     <string name="settings_theme_mode_hint">深色、浅色，或跟随手表</string>
     <string name="settings_theme_mode_value">当前：%1$s</string>
