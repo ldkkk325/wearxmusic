@@ -8,6 +8,7 @@ sealed interface Route {
     data object More : Route
     data object Volume : Route
     data object Settings : Route
+    data object Search : Route
 
     /**
      * Serialises this route to a `String` so the back stack can go through `rememberSaveable` and
@@ -19,6 +20,7 @@ sealed interface Route {
         More -> "more"
         Volume -> "volume"
         Settings -> "settings"
+        Search -> "search"
         is AlbumDetail -> "album:$albumId"
     }
 
@@ -34,6 +36,7 @@ sealed interface Route {
             key == "more" -> More
             key == "volume" -> Volume
             key == "settings" -> Settings
+            key == "search" -> Search
             else -> Library
         }
     }

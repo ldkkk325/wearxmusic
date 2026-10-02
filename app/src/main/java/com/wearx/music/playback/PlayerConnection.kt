@@ -6,6 +6,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -49,9 +50,34 @@ class PlayerConnection(
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    /**
+     * Why playback last stopped on its own, kept outside the snapshot because it is a fact about
+     * the player rather than something the UI sets. Cleared as soon as the user starts playback
+     * again, so a stale reason can never sit under a running track.
+     */
+    private var interruption: PlaybackInterruption? = null
+
     private val listener = object : Player.Listener {
         // `onEvents` is the catch-all callback, so one override keeps the snapshot in sync.
         override fun onEvents(player: Player, events: Player.Events) = publish()
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            interruption = when {
+                playWhenReady -> null
+                reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_BECOMING_NOISY ->
+                    PlaybackInterruption.AUDIO_BECOMING_NOISY
+
+                reason == Player.PLAY_WHEN_READY_CHANGE_REASON_AUDIO_FOCUS_LOSS ->
+                    PlaybackInterruption.AUDIO_FOCUS_LOST
+
+                // A user request, or the end of the queue: neither is an interruption.
+                else -> null
+            }
+        }
+
+        override fun onPlayerError(error: PlaybackException) {
+            interruption = PlaybackInterruption.ERROR
+        }
     }
 
     fun connect() {
@@ -88,6 +114,8 @@ class PlayerConnection(
 
     fun playPause() {
         val player = controller ?: return
+        // Starting playback deliberately clears whatever had stopped it before.
+        interruption = null
         if (player.isPlaying) {
             player.pause()
         } else {
@@ -218,6 +246,7 @@ class PlayerConnection(
             hasNext = player.mediaItemCount > 0,
             hasPrevious = player.mediaItemCount > 0,
             queueSize = player.mediaItemCount,
+            interruption = interruption,
         )
     }
 
@@ -225,10 +254,24 @@ class PlayerConnection(
         if (positionJob != null) return
         positionJob = scope.launch {
             while (isActive) {
-                // Poll even while paused so a seek (or a pause) is reflected immediately; the
-                // position only actually moves while playing.
-                if (controller != null) publish()
-                delay(POSITION_POLL_INTERVAL_MS)
+                val player = controller
+                // Poll even while paused, so a seek that did not come through this class is still
+                // reflected — but only as a safety net. Everything the UI itself does publishes
+                // directly, and everything the system does arrives on the listener, so while paused
+                // nothing about the player changes on its own and the old flat 4 Hz poll was
+                // emitting an identical snapshot four times a second for nothing.
+                if (player != null) {
+                    publish()
+                    delay(
+                        if (player.isPlaying) {
+                            POSITION_POLL_INTERVAL_PLAYING_MS
+                        } else {
+                            POSITION_POLL_INTERVAL_IDLE_MS
+                        },
+                    )
+                } else {
+                    delay(POSITION_POLL_INTERVAL_IDLE_MS)
+                }
             }
         }
     }
@@ -250,7 +293,11 @@ class PlayerConnection(
             .build()
 
     private companion object {
-        const val POSITION_POLL_INTERVAL_MS = 250L
+        /** Only the playing rate has to look continuous; the position genuinely moves. */
+        const val POSITION_POLL_INTERVAL_PLAYING_MS = 250L
+
+        /** Safety net only — 1 Hz, and it usually emits a state equal to the previous one. */
+        const val POSITION_POLL_INTERVAL_IDLE_MS = 1_000L
         const val RESTART_THRESHOLD_MS = 3_000L
     }
 }

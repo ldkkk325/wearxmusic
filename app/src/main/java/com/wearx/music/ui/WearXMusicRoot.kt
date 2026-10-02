@@ -77,6 +77,7 @@ import com.wearx.music.ui.screens.LibraryScreen
 import com.wearx.music.ui.screens.MoreScreen
 import com.wearx.music.ui.screens.NowPlayingScreen
 import com.wearx.music.ui.screens.PermissionScreen
+import com.wearx.music.ui.screens.SearchScreen
 import com.wearx.music.ui.screens.SettingsScreen
 import com.wearx.music.ui.screens.VolumeScreen
 import kotlinx.coroutines.delay
@@ -138,6 +139,13 @@ fun WearXMusicRoot() {
     // boundaries and a repeat mode loops everything rather than a single album.
     val libraryQueue = remember(albums) { albums.flatMap { it.tracks } }
     val tracks = remember(libraryQueue) { libraryQueue.sortedBy { it.title.lowercase() } }
+
+    // Tracks copied onto the watch carry no album id, so their own art Uri is empty; falling back to
+    // the containing album's cover is what gives those files a picture at all. Hoisted here so the
+    // library list and the search results resolve artwork the same way.
+    val artByTrackId = remember(albums) {
+        albums.flatMap { album -> album.tracks.map { it.id to album.artUri } }.toMap()
+    }
 
     // Which way the last navigation went, so the transition plays in the matching direction.
     var navigatingForward by remember { mutableStateOf(true) }
@@ -354,11 +362,13 @@ fun WearXMusicRoot() {
                                 albums = albums,
                                 tracks = tracks,
                                 playback = playback,
+                                artByTrackId = artByTrackId,
                                 isRescanning = isRescanning,
                                 onAlbumClick = { album -> navigate(Route.AlbumDetail(album.id)) },
                                 onTrackClick = ::play,
                                 onOpenVolume = { navigate(Route.Volume) },
                                 onOpenSettings = { navigate(Route.Settings) },
+                                onOpenSearch = { navigate(Route.Search) },
                                 onTogglePlay = app.player::playPause,
                                 onOpenNowPlaying = { navigate(Route.NowPlaying) },
                                 onRescan = {
@@ -408,6 +418,14 @@ fun WearXMusicRoot() {
                         )
 
                         Route.Volume -> VolumeScreen()
+
+                        Route.Search -> SearchScreen(
+                            tracks = tracks,
+                            albums = albums,
+                            artByTrackId = artByTrackId,
+                            onTrackClick = ::play,
+                            onAlbumClick = { album -> navigate(Route.AlbumDetail(album.id)) },
+                        )
 
                         Route.Settings -> SettingsScreen(
                             settings = settings,

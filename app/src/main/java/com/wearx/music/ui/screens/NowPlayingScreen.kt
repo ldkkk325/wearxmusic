@@ -54,6 +54,7 @@ import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.data.Lyrics
+import com.wearx.music.playback.PlaybackInterruption
 import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.ArtworkBackdrop
 import com.wearx.music.ui.components.MarqueeText
@@ -220,6 +221,28 @@ private fun PlayerPage(
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                 )
+
+                // Only while something actually stopped playback, and never while the music is
+                // running — otherwise this would sit under every track claiming a problem.
+                state.interruption?.takeIf { !state.isPlaying }?.let { reason ->
+                    Text(
+                        text = stringResource(
+                            when (reason) {
+                                PlaybackInterruption.AUDIO_BECOMING_NOISY ->
+                                    R.string.playback_interrupted_noisy
+
+                                PlaybackInterruption.AUDIO_FOCUS_LOST ->
+                                    R.string.playback_interrupted_focus
+
+                                PlaybackInterruption.ERROR -> R.string.playback_error
+                            },
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                    )
+                }
             }
 
             TransportRow(state, reduceMotion, onPrevious, onPlayPause, onNext)

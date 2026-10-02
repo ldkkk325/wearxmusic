@@ -26,12 +26,12 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
@@ -77,23 +77,19 @@ fun LibraryScreen(
     albums: List<Album>,
     tracks: List<Track>,
     playback: PlayerUiState,
+    artByTrackId: Map<Long, Uri?>,
     isRescanning: Boolean,
     onAlbumClick: (Album) -> Unit,
     onTrackClick: (Track) -> Unit,
     onOpenVolume: () -> Unit,
     onOpenSettings: () -> Unit,
+    onOpenSearch: () -> Unit,
     onTogglePlay: () -> Unit,
     onOpenNowPlaying: () -> Unit,
     onRescan: () -> Unit,
 ) {
     val scrollState = rememberScalingLazyListState()
     var showTracks by rememberSaveable { mutableStateOf(true) }
-
-    // Tracks copied onto the watch carry no album id, so their own art Uri is empty; falling back
-    // to the containing album's cover is what gives those files a picture at all.
-    val artByTrackId = remember(albums) {
-        albums.flatMap { album -> album.tracks.map { it.id to album.artUri } }.toMap()
-    }
 
     ScreenScaffold(scrollState = scrollState) { padding ->
         ScalingLazyColumn(
@@ -118,6 +114,15 @@ fun LibraryScreen(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = ButtonGroupDefaults.fullWidthPaddings(),
                 ) {
+                    MorphGroupIconButton(
+                        onClick = onOpenSearch,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Search,
+                                contentDescription = stringResource(R.string.nav_search),
+                            )
+                        },
+                    )
                     MorphGroupIconButton(
                         onClick = { showTracks = true },
                         active = showTracks,
