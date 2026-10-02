@@ -33,7 +33,7 @@ import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.NoEdgeFadeScaling
-import com.wearx.music.ui.components.BackButtonSpacing
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.util.formatDuration
 
@@ -132,11 +132,9 @@ fun AlbumDetailScreen(
                     }
                 }
             }
-            // In the content flow at the end, not floating over it — see ScreenBackButton.
-            item {
-                Spacer(Modifier.height(BackButtonSpacing))
-                ScreenBackButton(onClick = onBack)
-            }
+            // Room for the pinned back button — see ScreenBackButton.
+            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
+        ScreenBackButton(onClick = onBack)
     }
 }

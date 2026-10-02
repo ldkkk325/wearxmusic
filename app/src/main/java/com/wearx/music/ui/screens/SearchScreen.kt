@@ -51,7 +51,7 @@ import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.NoEdgeFadeScaling
-import com.wearx.music.ui.components.BackButtonSpacing
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.ScreenBackButton
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.material3.CompactButton
@@ -202,12 +202,10 @@ fun SearchScreen(
                 )
             }
 
-            // In the content flow at the end, not floating over it — see ScreenBackButton.
-            item {
-                Spacer(Modifier.height(BackButtonSpacing))
-                ScreenBackButton(onClick = onBack)
-            }
+            // Room for the pinned back button — see ScreenBackButton.
+            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
+        ScreenBackButton(onClick = onBack)
     }
 
     // Bringing the keyboard up on entry is the whole point of the screen; a tap to focus first is a

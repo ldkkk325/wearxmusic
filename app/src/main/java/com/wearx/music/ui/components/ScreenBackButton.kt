@@ -1,9 +1,11 @@
 package com.wearx.music.ui.components
 
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -19,29 +21,28 @@ import com.wearx.music.R
  * up — so what this is for is discoverability: a gesture-only way out of a deep screen is invisible
  * until you know it exists, and the settings pages are where that costs the most.
  *
- * **It belongs in the scrolling content, not floating over it.** In the scaffold's own layout the
- * button claims the space *below* the list and the list is given a gap above it — it is laid out
- * after the content, not on top of it, so it only comes into view when you have scrolled to the end.
- * An overlay pinned to the bottom of the screen sits over the content the whole time, which is a
- * different thing and reads as one.
+ * **It is a fixed region at the bottom of the page, and the content is given room above it.** Not a
+ * list item, which would scroll away and only appear at the very end of the list, and not an
+ * overlay, which would sit on top of the content for the whole time — the button is always there
+ * and the content stops short of it.
  *
- * So this is a plain composable to be added as the LAST item of the list, and `ScreenScaffold` is
- * used WITHOUT an `edgeButton` slot — the public one does not have one anyway (checked against the
- * compiled signature of compose-material3 1.7.0, the newest release; it exists only on the internal
- * overload).
- *
- * For the pages whose body is not a list, put it after the last child of the column instead. Either
- * way it ends up in the flow, at the bottom, exactly where the empty space was.
+ * That is the arrangement `ScreenScaffold` uses: the button claims the space below the list and the
+ * list is given a gap above it. The public `ScreenScaffold` does not expose its `edgeButton` slot
+ * (checked against the compiled signature of compose-material3 1.7.0, the newest release — it
+ * exists only on the internal overload), so both halves are done here: this is pinned to the bottom,
+ * and each page pads its content by [BackButtonReservedHeight].
  */
 @Composable
-fun ScreenBackButton(
+fun BoxScope.ScreenBackButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     EdgeButton(
         onClick = onClick,
         buttonSize = EdgeButtonSize.Small,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .align(Alignment.BottomCenter)
+            .fillMaxWidth(),
     ) {
         Icon(
             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -51,8 +52,10 @@ fun ScreenBackButton(
 }
 
 /**
- * The gap to leave above the button, matching the scaffold's own `edgeButtonSpacing` idea: the button
- * hugs the end of the content and the content stops short of it, so the two read as neighbours
- * rather than as a button pasted onto a list.
+ * The height the page's content must leave at the bottom so it never runs under [ScreenBackButton].
+ *
+ * Wear's own numbers: `EdgeButtonSize.Small` is 56 dp and `ScreenScaffoldDefaults.EdgeButtonSpacing`
+ * is 16 dp (both read from the library source). Their sum is added to the screen's normal bottom
+ * padding rather than replacing it.
  */
-val BackButtonSpacing = 12.dp
+val BackButtonReservedHeight = 56.dp + 16.dp

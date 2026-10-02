@@ -35,7 +35,7 @@ import com.wearx.music.R
 import com.wearx.music.data.PlaybackMode
 import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.MorphGroupIconButton
-import com.wearx.music.ui.components.BackButtonSpacing
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.ui.labelRes
@@ -152,11 +152,9 @@ fun MoreScreen(
                 }
             }
 
-            // In the content flow at the end, not floating over it — see ScreenBackButton.
-            item {
-                Spacer(Modifier.height(BackButtonSpacing))
-                ScreenBackButton(onClick = onBack)
-            }
+            // Room for the pinned back button — see ScreenBackButton.
+            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
+        ScreenBackButton(onClick = onBack)
     }
 }
