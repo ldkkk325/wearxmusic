@@ -38,6 +38,7 @@ import com.wearx.music.data.ThemeMode
 import com.wearx.music.ui.SettingsSection
 import com.wearx.music.ui.components.MorphGroupIconButton
 import com.wearx.music.ui.components.NoEdgeFadeScaling
+import com.wearx.music.ui.components.ScreenBackButton
 import kotlin.math.roundToInt
 
 /**
@@ -58,6 +59,7 @@ fun SettingsSectionScreen(
     onMorphBlurChange: (Int) -> Unit,
     onTransitionDurationChange: (Int) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onBack: () -> Unit,
 ) {
     val scrollState = rememberScalingLazyListState()
 
@@ -96,6 +98,7 @@ fun SettingsSectionScreen(
                 SettingsSection.ABOUT -> aboutSection(settings = settings, versionName = versionName)
             }
         }
+        ScreenBackButton(onClick = onBack)
     }
 }
 

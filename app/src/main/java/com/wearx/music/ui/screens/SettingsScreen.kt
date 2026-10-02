@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Brightness6
-import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.PlayCircle
+import androidx.compose.material.icons.filled.Animation
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.runtime.Composable
@@ -137,13 +137,13 @@ private val SETTINGS_SECTIONS = listOf(
         section = SettingsSection.MOTION,
         titleRes = R.string.settings_group_motion,
         summaryRes = R.string.settings_group_motion_summary,
-        icon = Icons.Filled.GraphicEq,
+        icon = Icons.Filled.Animation,
     ),
     SettingsSectionEntry(
         section = SettingsSection.PLAYBACK,
         titleRes = R.string.settings_group_playback,
         summaryRes = R.string.settings_group_playback_summary,
-        icon = Icons.Filled.Brightness6,
+        icon = Icons.Filled.PlayCircle,
     ),
     SettingsSectionEntry(
         section = SettingsSection.ABOUT,

@@ -41,6 +41,7 @@ import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.ui.components.MorphButton
+import com.wearx.music.ui.components.ScreenBackButton
 import kotlin.math.roundToInt
 
 /**
@@ -51,7 +52,7 @@ import kotlin.math.roundToInt
  * zero, so the page cannot be dragged into empty space.
  */
 @Composable
-fun VolumeScreen() {
+fun VolumeScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val audioManager = remember(context) {
         context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -169,6 +170,7 @@ fun VolumeScreen() {
 
             Spacer(Modifier.height(6.dp))
         }
+        ScreenBackButton(onClick = onBack)
     }
 }
 

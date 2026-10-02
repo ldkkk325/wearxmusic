@@ -51,6 +51,7 @@ import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.NoEdgeFadeScaling
+import com.wearx.music.ui.components.ScreenBackButton
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.material3.CompactButton
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -74,6 +75,7 @@ fun SearchScreen(
     artByTrackId: Map<Long, Uri?>,
     onTrackClick: (Track) -> Unit,
     onAlbumClick: (Album) -> Unit,
+    onBack: () -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -201,6 +203,7 @@ fun SearchScreen(
 
             item { Spacer(Modifier.height(12.dp)) }
         }
+        ScreenBackButton(onClick = onBack)
     }
 
     // Bringing the keyboard up on entry is the whole point of the screen; a tap to focus first is a

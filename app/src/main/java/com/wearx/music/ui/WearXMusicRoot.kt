@@ -422,6 +422,7 @@ fun WearXMusicRoot() {
                                     nowPlayingMediaId = playback.mediaId,
                                     onPlayAll = { playFromAlbum(album) },
                                     onTrackClick = ::play,
+                                    onBack = { goBack() },
                                 )
                             }
                         }
@@ -443,9 +444,10 @@ fun WearXMusicRoot() {
                             state = playback,
                             onSeekBy = app.player::seekBy,
                             onCyclePlaybackMode = app.player::cyclePlaybackMode,
+                            onBack = { goBack() },
                         )
 
-                        Route.Volume -> VolumeScreen()
+                        Route.Volume -> VolumeScreen(onBack = { goBack() })
 
                         Route.Search -> SearchScreen(
                             tracks = tracks,
@@ -453,6 +455,7 @@ fun WearXMusicRoot() {
                             artByTrackId = artByTrackId,
                             onTrackClick = ::play,
                             onAlbumClick = { album -> navigate(Route.AlbumDetail(album.id)) },
+                            onBack = { goBack() },
                         )
 
                         Route.Settings -> SettingsScreen(
@@ -471,6 +474,7 @@ fun WearXMusicRoot() {
                             onMorphBlurChange = app.settings::setMorphBlurIndex,
                             onTransitionDurationChange = app.settings::setTransitionDurationIndex,
                             onThemeModeChange = app.settings::setThemeMode,
+                            onBack = { goBack() },
                         )
                 }
             }

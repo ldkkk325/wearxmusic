@@ -36,6 +36,7 @@ import com.wearx.music.data.PlaybackMode
 import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.MorphGroupIconButton
 import com.wearx.music.ui.components.NoEdgeFadeScaling
+import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.ui.labelRes
 
 private const val SEEK_STEP_MS = 10_000L
@@ -51,6 +52,7 @@ fun MoreScreen(
     state: PlayerUiState,
     onSeekBy: (Long) -> Unit,
     onCyclePlaybackMode: () -> Unit,
+    onBack: () -> Unit,
 ) {
     val scrollState = rememberScalingLazyListState()
 
@@ -149,5 +151,6 @@ fun MoreScreen(
                 }
             }
         }
+        ScreenBackButton(onClick = onBack)
     }
 }
