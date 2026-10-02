@@ -8,7 +8,6 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animate
@@ -87,8 +86,6 @@ import com.wearx.music.ui.screens.SettingsScreen
 import com.wearx.music.ui.screens.VolumeScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.PI
-import kotlin.math.sin
 
 /**
  * Root of the watch UI.
@@ -208,28 +205,17 @@ fun WearXMusicRoot() {
         }
     }
 
-    // How each route was opened, so that leaving it can play the same motion in reverse. Entries are
-    // dropped when the route is popped — otherwise a route reached again later by some other path
-    // would exit out of an origin that has nothing to do with how it was entered.
-    val routeGrowth = remember { mutableMapOf<String, RouteGrowth>() }
-
     fun navigate(route: Route) {
         navigatingForward = true
         pushOrigin = lastPress
         pushStartScale = pressStartScale
         pushedRoute = route
-        // Remember the circle this page is about to grow out of, so its way back can shrink into the
-        // same spot. Without a recorded press there is no circle to mirror, and the page leaves the
-        // ordinary way.
-        pushOrigin?.let { routeGrowth[route.encode()] = RouteGrowth(it, pushStartScale) }
         backStack.add(route)
     }
 
     fun goBack() {
         navigatingForward = false
-        if (backStack.size > 1) {
-            routeGrowth.remove(backStack.removeAt(backStack.lastIndex).encode())
-        }
+        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
     }
 
     fun play(track: Track) {
@@ -583,7 +569,7 @@ fun WearXMusicRoot() {
                                     else -> scaleIn(
                                         animationSpec = tween(
                                             durationMillis = routeTransitionMs,
-                                            easing = MorphEasing,
+                                            easing = RouteEasing,
                                         ),
                                         initialScale = pushStartScale,
                                         transformOrigin = TransformOrigin(
@@ -592,21 +578,10 @@ fun WearXMusicRoot() {
                                         ),
                                     )
                                 },
-                            // A page that arrived through the container transform leaves by the same
-                            // route in reverse — its own circle, its own origin, its own curve. The
-                            // slide-out is only for pages that were not opened that way.
-                            initialContentExit = when {
-                                reduceMotion -> ExitTransition.None
-                                pop -> routeGrowth[initialKey]?.let { growth ->
-                                    containerPopOut(
-                                        durationMs = routeTransitionMs,
-                                        origin = growth.origin,
-                                        startScale = growth.startScale,
-                                    )
-                                } ?: routePopExit(routeTransitionMs)
-
-                                else -> routeExit(routeTransitionMs)
-                            },
+                            initialContentExit =
+                                if (reduceMotion) ExitTransition.None
+                                else if (pop) routePopExit(routeTransitionMs)
+                                else routeExit(routeTransitionMs),
                             targetContentZIndex = targetZ,
                             sizeTransform = null,
                         )
@@ -717,19 +692,22 @@ private fun LoadingIndicator() {
 }
 
 /**
- * The curve the page-opening morph runs on: **easeOutQuint**, `cubic-bezier(0.23, 1, 0.32, 1)`.
+ * The curve every route transition runs on: the iOS open/close curve,
+ * `cubic-bezier(0.32, 0.72, 0, 1)`.
  *
- * It leaves the gate at roughly four times its average speed and decelerates smoothly to a stop —
- * 49 % of the distance by 13 % of the duration, 78 % by 26 %, 94 % by 42 %. That steep opening is
- * the point: an earlier curve here was `(0.2, 0, 0, 1)`, whose initial tangent is horizontal, so it
- * sat still for the first frames and then lurched, which reads as jank even with no dropped frames.
- * This one answers the tap immediately and then settles.
+ * This is the curve iOS uses to open and close an app over another, and it is deliberately
+ * front-loaded: 46 % of the travel by 15 % of the duration, 95 % by half, and it settles over the
+ * rest. It leaves the gate at 2.25× its average speed, so a tap still gets an immediate answer.
  *
- * The trade is the tail: the last third of the duration carries the final 1 %, so if the settle
- * feels like a hover, shorten [AppSettings.TRANSITION_DURATION_CHOICES] rather than reaching for
- * another curve — it is a setting for exactly this.
+ * The other iOS curve, `.easeInOut` (`0.42, 0, 0.58, 1`), was rejected on purpose: it is at 5 %
+ * after 15 % of the duration, i.e. a near-zero start, which is exactly the dead patch that was
+ * rejected on the back gesture. This is the iOS curve for things that are ARRIVING.
+ *
+ * The trade is the tail, and it is the price of the iOS look: the last quarter of the duration
+ * carries almost nothing. If it feels like a hover, shorten [AppSettings.TRANSITION_DURATION_CHOICES]
+ * rather than reaching for another curve — it is a setting for exactly this.
  */
-private val RouteEasing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
+private val RouteEasing = CubicBezierEasing(0.32f, 0.72f, 0f, 1f)
 /** How long the palette takes to shift to a new track's cover. See the note where it is used. */
 private const val ThemeShiftMs = 320
 
@@ -741,9 +719,8 @@ private const val ThemeShiftMs = 320
  * a quarter of the drag and at 42 % after three quarters, which reads as "the page has stopped
  * responding" and then a rush at the end. Linear keeps the page exactly where the finger is.
  *
- * The push morph keeps [RouteEasing] (easeOutQuint): nothing drives it, so there is no finger to
- * fall behind, and an immediate response is what makes it feel alive. Same screen, two different
- * rules, because one is gesture-driven and the other is not.
+ * The push keeps the iOS curve: nothing drives it, so there is no finger to fall behind. Same
+ * screen, two different rules, because one is gesture-driven and the other is not.
  */
 private val BackEasing = LinearEasing
 
@@ -770,24 +747,6 @@ private val BackEasing = LinearEasing
  * One smooth function, so there is no seam: the rebound is produced by the same motion that reaches
  * the finish, and the curve is monotone from the peak onwards.
  */
-private val MorphEasing = Easing { t ->
-    // easeOutQuint alone, blended with a straight line.
-    //
-    // Quint is front-loaded to the point of looking dead: it is already at 97 % at the half way
-    // mark and 99 % at 0.6, so the last two thirds of the duration draw an unmoving page. A blend
-    // keeps the fast departure the curve was originally chosen for — initial speed 3.6 against
-    // quint's 5.0 — while spreading the travel across the whole clock: this one is at 80 % at the
-    // half way mark and does not reach 99 % until 0.97. Every frame of the transition now moves.
-    //
-    // The gentle ring keeps a small lift through the middle and a soft arrival at the end.
-    val quint = 1f - (1f - t) * (1f - t) * (1f - t) * (1f - t) * (1f - t)
-    val ring = sin(PI.toFloat() * t).let { it * it * it * it }
-    MorphQuintWeight * quint + (1f - MorphQuintWeight) * t + MorphRingAmount * ring
-}
-
-/** How much of the shape is easeOutQuint against the linear blend. Lower spreads the motion out. */
-private const val MorphQuintWeight = 0.65f
-
 /** How much the push overshoots past its finished size. Larger gives a more visible rebound. */
 private const val MorphRingAmount = 0.05f
 
@@ -799,16 +758,21 @@ private const val MorphRingAmount = 0.05f
 private val OriginDiameter = 40.dp
 
 /**
- * The page being replaced during a push: it swells a little and fades, so the new page reads as
- * coming forward over it. This is the exit half of Material's container transform — no travel,
- * because travel would compete with the growing circle.
+ * The page being replaced during a push: it shrinks back and fades, so the new page reads as
+ * coming FORWARD over it.
+ *
+ * The direction matters and was deliberately reversed. It used to swell to 1.05, which is Material's
+ * own container transform — but that reads as the new page being pushed *into* the old one. Shrinking
+ * is what gives the two pages depth: the one underneath retreats, the circle comes forward. Same
+ * move iOS makes when an app opens over another, and on a round screen it reads cleanly because the
+ * shrinking page stays a circle inside the growing one.
  */
 // These are FUNCTIONS rather than vals because the duration is a setting: a top-level `val` would
 // be computed once when the file's class initialises, long before any setting exists, and every
 // page would open at the compiled-in speed. Taking the duration as a parameter is what lets one
 // number scale the growth, the exit and the play head together.
 private fun routeExit(durationMs: Int): ExitTransition =
-    scaleOut(targetScale = 1.05f, animationSpec = tween(durationMs, easing = RouteEasing)) +
+    scaleOut(targetScale = 0.9f, animationSpec = tween(durationMs, easing = RouteEasing)) +
         fadeOut(animationSpec = tween(durationMs, easing = RouteEasing))
 
 /**
@@ -825,25 +789,6 @@ private fun routePopEnter(durationMs: Int): EnterTransition =
             animationSpec = tween(durationMs, easing = BackEasing),
         ) +
         fadeIn(initialAlpha = 0.5f, animationSpec = tween(durationMs, easing = BackEasing))
-/** The circle a route was opened from, kept so its way back can be the same motion reversed. */
-private class RouteGrowth(val origin: Offset, val startScale: Float)
-
-/**
- * The mirror of a push, for a page that was opened with the container transform and is now going
- * back: the same circle, same origin, same curve, played in reverse — it shrinks back into the point
- * it grew out of. Without this a page that grew out of a button slid sideways off the dial instead,
- * which is what made a back gesture feel unrelated to how the page arrived.
- */
-private fun containerPopOut(
-    durationMs: Int,
-    origin: Offset,
-    startScale: Float,
-): ExitTransition = scaleOut(
-    animationSpec = tween(durationMs, easing = MorphEasing),
-    targetScale = startScale,
-    transformOrigin = TransformOrigin(origin.x, origin.y),
-)
-
 private fun routePopExit(durationMs: Int): ExitTransition =
     slideOutHorizontally(
         targetOffsetX = { it },
