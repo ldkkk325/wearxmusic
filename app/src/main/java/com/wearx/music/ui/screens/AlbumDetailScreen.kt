@@ -33,6 +33,7 @@ import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.NoEdgeFadeScaling
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.util.formatDuration
 
@@ -131,7 +132,8 @@ fun AlbumDetailScreen(
                     }
                 }
             }
-            item { Spacer(Modifier.height(24.dp)) }
+            // Leaves the bottom clear for the back button (see ScreenBackButton).
+            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
         ScreenBackButton(onClick = onBack)
     }

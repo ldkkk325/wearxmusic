@@ -37,6 +37,7 @@ import com.wearx.music.data.AppSettings
 import com.wearx.music.data.ThemeMode
 import com.wearx.music.ui.SettingsSection
 import com.wearx.music.ui.components.MorphGroupIconButton
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.ScreenBackButton
 import kotlin.math.roundToInt
@@ -96,6 +97,11 @@ fun SettingsSectionScreen(
 
                 SettingsSection.PLAYBACK -> playbackSection()
                 SettingsSection.ABOUT -> aboutSection(settings = settings, versionName = versionName)
+            }
+
+            item {
+                // Leaves the bottom clear for the back button (see ScreenBackButton).
+                Spacer(Modifier.height(BackButtonReservedHeight))
             }
         }
         ScreenBackButton(onClick = onBack)

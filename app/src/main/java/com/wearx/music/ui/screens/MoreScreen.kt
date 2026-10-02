@@ -35,6 +35,7 @@ import com.wearx.music.R
 import com.wearx.music.data.PlaybackMode
 import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.MorphGroupIconButton
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.ui.labelRes
@@ -150,6 +151,9 @@ fun MoreScreen(
                     }
                 }
             }
+
+            // Leaves the bottom clear for the back button (see ScreenBackButton).
+            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
         ScreenBackButton(onClick = onBack)
     }

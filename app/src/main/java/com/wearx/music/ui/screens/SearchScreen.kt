@@ -51,6 +51,7 @@ import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.NoEdgeFadeScaling
+import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.ScreenBackButton
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.material3.CompactButton
@@ -201,7 +202,7 @@ fun SearchScreen(
                 )
             }
 
-            item { Spacer(Modifier.height(12.dp)) }
+            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
         ScreenBackButton(onClick = onBack)
     }
