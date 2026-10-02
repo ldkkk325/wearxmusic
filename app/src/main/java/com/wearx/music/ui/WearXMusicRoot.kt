@@ -208,17 +208,28 @@ fun WearXMusicRoot() {
         }
     }
 
+    // How each route was opened, so that leaving it can play the same motion in reverse. Entries are
+    // dropped when the route is popped — otherwise a route reached again later by some other path
+    // would exit out of an origin that has nothing to do with how it was entered.
+    val routeGrowth = remember { mutableMapOf<String, RouteGrowth>() }
+
     fun navigate(route: Route) {
         navigatingForward = true
         pushOrigin = lastPress
         pushStartScale = pressStartScale
         pushedRoute = route
+        // Remember the circle this page is about to grow out of, so its way back can shrink into the
+        // same spot. Without a recorded press there is no circle to mirror, and the page leaves the
+        // ordinary way.
+        pushOrigin?.let { routeGrowth[route.encode()] = RouteGrowth(it, pushStartScale) }
         backStack.add(route)
     }
 
     fun goBack() {
         navigatingForward = false
-        if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+        if (backStack.size > 1) {
+            routeGrowth.remove(backStack.removeAt(backStack.lastIndex).encode())
+        }
     }
 
     fun play(track: Track) {
@@ -252,6 +263,7 @@ fun WearXMusicRoot() {
     // Stacking order per route, raised by each push and lowered by each pop. Not snapshot state: it
     // is read and written inside `transitionSpec`, which must not trigger a recomposition.
     val routeZIndices = remember { mutableMapOf<String, Float>() }
+
 
     // Opening-page blur, in pixels, from the stored dp.
     val morphBlurPx = with(LocalDensity.current) {
@@ -580,10 +592,21 @@ fun WearXMusicRoot() {
                                         ),
                                     )
                                 },
-                            initialContentExit =
-                                if (reduceMotion) ExitTransition.None
-                                else if (pop) routePopExit(routeTransitionMs)
-                                else routeExit(routeTransitionMs),
+                            // A page that arrived through the container transform leaves by the same
+                            // route in reverse — its own circle, its own origin, its own curve. The
+                            // slide-out is only for pages that were not opened that way.
+                            initialContentExit = when {
+                                reduceMotion -> ExitTransition.None
+                                pop -> routeGrowth[initialKey]?.let { growth ->
+                                    containerPopOut(
+                                        durationMs = routeTransitionMs,
+                                        origin = growth.origin,
+                                        startScale = growth.startScale,
+                                    )
+                                } ?: routePopExit(routeTransitionMs)
+
+                                else -> routeExit(routeTransitionMs)
+                            },
                             targetContentZIndex = targetZ,
                             sizeTransform = null,
                         )
@@ -600,9 +623,9 @@ fun WearXMusicRoot() {
                             // outer one, so what gets scaled is already a circle.
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.background)
-                            // DEPTH OF FIELD, on the page-opening transition only. The page being
-                            // covered goes out of focus as the new circle grows over it, and the
-                            // page arriving starts barely soft and comes fully sharp.
+                            // DEPTH OF FIELD, on the page-opening transition only: the page being
+                            // covered goes out of focus as the new circle grows over it. The page
+                            // arriving stays sharp — it is what you are meant to be looking at.
                             //
                             // Deliberately nothing on a back gesture. There the finger is driving
                             // both pages and the user is looking at them, so blur reads as lag; and
@@ -621,21 +644,11 @@ fun WearXMusicRoot() {
                                 val pushRunning = routeTransitionState.currentState !=
                                     routeTransitionState.targetState && navigatingForward
                                 val isBehind = pushRunning && route == routeTransitionState.currentState
-                                val isArriving = pushRunning && route == routeTransitionState.targetState
                                 val blur = when {
                                     // Depth of field: the page being covered ramps up to the
                                     // configured radius and relaxes as it is uncovered.
                                     isBehind ->
                                         morphBlurPx * routeTransitionState.fraction.coerceIn(0f, 1f)
-
-                                    // The page arriving starts barely soft and comes fully into
-                                    // focus by the time it has grown. One dp is below the threshold
-                                    // of "this looks broken" on a 454 px dial; it exists to take the
-                                    // hard edge off a scaled-up page, not to be noticed — so it ramps
-                                    // out rather than sitting there.
-                                    isArriving ->
-                                        IncomingPageBlur.toPx() *
-                                            (1f - routeTransitionState.fraction.coerceIn(0f, 1f))
 
                                     else -> 0f
                                 }
@@ -758,13 +771,25 @@ private val BackEasing = LinearEasing
  * the finish, and the curve is monotone from the peak onwards.
  */
 private val MorphEasing = Easing { t ->
+    // easeOutQuint alone, blended with a straight line.
+    //
+    // Quint is front-loaded to the point of looking dead: it is already at 97 % at the half way
+    // mark and 99 % at 0.6, so the last two thirds of the duration draw an unmoving page. A blend
+    // keeps the fast departure the curve was originally chosen for — initial speed 3.6 against
+    // quint's 5.0 — while spreading the travel across the whole clock: this one is at 80 % at the
+    // half way mark and does not reach 99 % until 0.97. Every frame of the transition now moves.
+    //
+    // The gentle ring keeps a small lift through the middle and a soft arrival at the end.
     val quint = 1f - (1f - t) * (1f - t) * (1f - t) * (1f - t) * (1f - t)
     val ring = sin(PI.toFloat() * t).let { it * it * it * it }
-    quint + MorphRingAmount * ring
+    MorphQuintWeight * quint + (1f - MorphQuintWeight) * t + MorphRingAmount * ring
 }
 
+/** How much of the shape is easeOutQuint against the linear blend. Lower spreads the motion out. */
+private const val MorphQuintWeight = 0.65f
+
 /** How much the push overshoots past its finished size. Larger gives a more visible rebound. */
-private const val MorphRingAmount = 0.025f
+private const val MorphRingAmount = 0.05f
 
 /**
  * The circle a pushed page grows out of. The real origin is the pressed point; this is how big that
@@ -772,12 +797,6 @@ private const val MorphRingAmount = 0.025f
  * the page reads as growing out of the control rather than out of a dot.
  */
 private val OriginDiameter = 40.dp
-
-/**
- * The blur a page carries as it starts arriving, ramping to nothing as it settles. Small on
- * purpose: it takes the hard edge off a page that is being scaled up without being noticeable.
- */
-private val IncomingPageBlur = 1.dp
 
 /**
  * The page being replaced during a push: it swells a little and fades, so the new page reads as
@@ -806,6 +825,25 @@ private fun routePopEnter(durationMs: Int): EnterTransition =
             animationSpec = tween(durationMs, easing = BackEasing),
         ) +
         fadeIn(initialAlpha = 0.5f, animationSpec = tween(durationMs, easing = BackEasing))
+/** The circle a route was opened from, kept so its way back can be the same motion reversed. */
+private class RouteGrowth(val origin: Offset, val startScale: Float)
+
+/**
+ * The mirror of a push, for a page that was opened with the container transform and is now going
+ * back: the same circle, same origin, same curve, played in reverse — it shrinks back into the point
+ * it grew out of. Without this a page that grew out of a button slid sideways off the dial instead,
+ * which is what made a back gesture feel unrelated to how the page arrived.
+ */
+private fun containerPopOut(
+    durationMs: Int,
+    origin: Offset,
+    startScale: Float,
+): ExitTransition = scaleOut(
+    animationSpec = tween(durationMs, easing = MorphEasing),
+    targetScale = startScale,
+    transformOrigin = TransformOrigin(origin.x, origin.y),
+)
+
 private fun routePopExit(durationMs: Int): ExitTransition =
     slideOutHorizontally(
         targetOffsetX = { it },
