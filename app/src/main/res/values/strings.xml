@@ -89,6 +89,9 @@
     <string name="settings_morph_blur_value">当前：%1$s</string>
     <string name="settings_scale_down">缩小界面</string>
     <string name="settings_scale_up">放大界面</string>
+    <string name="settings_transition_duration">转场时长</string>
+    <string name="settings_transition_duration_hint">打开页面与返回的速度</string>
+    <string name="settings_transition_duration_value">当前：%1$s（%2$d 毫秒）</string>
     <string name="settings_morph_blur">背景模糊</string>
     <string name="settings_morph_blur_hint">新页面长出来时，下方页面渐渐失焦</string>
     <string name="settings_morph_blur_off">关闭</string>

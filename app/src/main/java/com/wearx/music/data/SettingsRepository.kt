@@ -37,6 +37,14 @@ data class AppSettings(
      * scale's spacing, and so a value from a future build cannot land between the offered steps.
      */
     val morphBlurIndex: Int = DEFAULT_MORPH_BLUR_INDEX,
+    /**
+     * How long a page transition runs, as an index into [TRANSITION_DURATION_CHOICES].
+     *
+     * One number covers the growth, the outgoing page's exit and the transition's play head —
+     * they cannot be set independently, because a morph that outlives the play head would have its
+     * page snap mid-growth when the transition ended underneath it.
+     */
+    val transitionDurationIndex: Int = DEFAULT_TRANSITION_DURATION_INDEX,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
@@ -45,6 +53,13 @@ data class AppSettings(
         val MORPH_BLUR_CHOICES = listOf(0f, 3f, 6f, 10f)
 
         const val DEFAULT_MORPH_BLUR_INDEX = 2
+
+        /** Fast enough to feel instant through to slow enough to watch the circle grow. */
+        val TRANSITION_DURATION_CHOICES = listOf(280, 420, 560, 800)
+
+        val TRANSITION_DURATION_LABELS = listOf("很快", "标准", "慢", "很慢")
+
+        const val DEFAULT_TRANSITION_DURATION_INDEX = 2
     }
 }
 
@@ -79,6 +94,13 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setTransitionDurationIndex(value: Int) {
+        prefs.edit()
+            .putInt(KEY_TRANSITION_DURATION, value.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices))
+            .apply()
+        _settings.value = read()
+    }
+
     fun setMorphBlurIndex(value: Int) {
         prefs.edit().putInt(KEY_MORPH_BLUR, value.coerceIn(AppSettings.MORPH_BLUR_CHOICES.indices)).apply()
         _settings.value = read()
@@ -97,6 +119,10 @@ class SettingsRepository(context: Context) {
             ?: PlaybackMode.REPEAT_ALL,
         morphBlurIndex = prefs.getInt(KEY_MORPH_BLUR, AppSettings.DEFAULT_MORPH_BLUR_INDEX)
             .coerceIn(AppSettings.MORPH_BLUR_CHOICES.indices),
+        transitionDurationIndex = prefs.getInt(
+            KEY_TRANSITION_DURATION,
+            AppSettings.DEFAULT_TRANSITION_DURATION_INDEX,
+        ).coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices),
     )
 
     private companion object {
@@ -105,5 +131,6 @@ class SettingsRepository(context: Context) {
         const val KEY_UI_SCALE = "ui_scale"
         const val KEY_PLAYBACK_MODE = "playback_mode"
         const val KEY_MORPH_BLUR = "morph_blur"
+        const val KEY_TRANSITION_DURATION = "transition_duration"
     }
 }

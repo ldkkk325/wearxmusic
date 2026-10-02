@@ -65,6 +65,7 @@ fun SettingsScreen(
     onReduceMotionChange: (Boolean) -> Unit,
     onUiScaleChange: (Float) -> Unit,
     onMorphBlurChange: (Int) -> Unit,
+    onTransitionDurationChange: (Int) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
 ) {
     val scrollState = rememberScalingLazyListState()
@@ -167,6 +168,44 @@ fun SettingsScreen(
                             icon = { Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.settings_switch_off)) },
                         )
                     }
+                }
+            }
+
+            item {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = stringResource(R.string.settings_transition_duration),
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.settings_transition_duration_value,
+                            AppSettings.TRANSITION_DURATION_LABELS[
+                                settings.transitionDurationIndex.coerceIn(
+                                    AppSettings.TRANSITION_DURATION_LABELS.indices,
+                                )
+                            ],
+                            AppSettings.TRANSITION_DURATION_CHOICES[
+                                settings.transitionDurationIndex.coerceIn(
+                                    AppSettings.TRANSITION_DURATION_CHOICES.indices,
+                                )
+                            ],
+                        ),
+                        style = MaterialTheme.typography.bodyExtraSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_transition_duration_hint),
+                        style = MaterialTheme.typography.bodyExtraSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Slider(
+                        value = settings.transitionDurationIndex,
+                        onValueChange = onTransitionDurationChange,
+                        valueProgression = 0..AppSettings.TRANSITION_DURATION_CHOICES.lastIndex,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
 

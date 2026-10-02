@@ -157,6 +157,13 @@ fun WearXMusicRoot() {
     // Which way the last navigation went, so the transition plays in the matching direction.
     var navigatingForward by remember { mutableStateOf(true) }
 
+    // One duration for the whole route transition — the growth, the exit and the play head — so
+    // they cannot drift apart. It has to be one number: a morph that outlives the play head would
+    // have its page snap mid-growth when the transition ended under it.
+    val routeTransitionMs = AppSettings.TRANSITION_DURATION_CHOICES[
+        settings.transitionDurationIndex.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices)
+    ]
+
     // Where the current push grew out of, and which route it was for. The point is recorded from the
     // pointer itself (see the observer below) rather than from each control: every navigation
     // trigger in the app is a control sitting under the finger, so one observer covers all of them —
@@ -177,7 +184,7 @@ fun WearXMusicRoot() {
     // would make a later pop grow out of a stale point.
     LaunchedEffect(pushedRoute) {
         if (pushedRoute != null) {
-            delay(RouteTransitionMs.toLong())
+            delay(routeTransitionMs.toLong())
             pushedRoute = null
             pushOrigin = null
         }
@@ -308,7 +315,7 @@ fun WearXMusicRoot() {
                 // its own clock, so the play head has to stay long enough to carry the outgoing page's
                 // exit along with it; shortening this would cut the growth off mid-way and leave the
                 // circle expanding over nothing.
-                navigatingForward -> routeTransitionState.animateTo(current, RouteSettleSpec)
+                navigatingForward -> routeTransitionState.animateTo(current, routeSettleSpec(routeTransitionMs))
 
                 // A committed pop has only the tail left, and the finger is already off the glass —
                 // this is the half-second of "the page is still creeping" that reads as slow. Time it
@@ -448,6 +455,7 @@ fun WearXMusicRoot() {
                             onReduceMotionChange = app.settings::setReduceMotion,
                             onUiScaleChange = app.settings::setUiScale,
                             onMorphBlurChange = app.settings::setMorphBlurIndex,
+                            onTransitionDurationChange = app.settings::setTransitionDurationIndex,
                             onDynamicColorChange = app.settings::setDynamicColor,
                         )
                 }
@@ -547,10 +555,10 @@ fun WearXMusicRoot() {
                             targetContentEnter =
                                 when {
                                     reduceMotion -> EnterTransition.None
-                                    pop -> RoutePopEnter
+                                    pop -> routePopEnter(routeTransitionMs)
                                     else -> scaleIn(
                                         animationSpec = tween(
-                                            durationMillis = RouteTransitionMs,
+                                            durationMillis = routeTransitionMs,
                                             easing = MorphEasing,
                                         ),
                                         initialScale = pushStartScale,
@@ -562,8 +570,8 @@ fun WearXMusicRoot() {
                                 },
                             initialContentExit =
                                 if (reduceMotion) ExitTransition.None
-                                else if (pop) RoutePopExit
-                                else RouteExit,
+                                else if (pop) routePopExit(routeTransitionMs)
+                                else routeExit(routeTransitionMs),
                             targetContentZIndex = targetZ,
                             sizeTransform = null,
                         )
@@ -580,10 +588,14 @@ fun WearXMusicRoot() {
                             // outer one, so what gets scaled is already a circle.
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.background)
-                            // DEPTH OF FIELD: the page underneath the incoming one goes out of
-                            // focus as the new circle grows over it. The incoming page is always
-                            // sharp; the outgoing one blurs up to the configured radius and comes
-                            // back as it is uncovered.
+                            // DEPTH OF FIELD, on the page-opening transition only. The page being
+                            // covered goes out of focus as the new circle grows over it, and the
+                            // page arriving starts barely soft and comes fully sharp.
+                            //
+                            // Deliberately nothing on a back gesture. There the finger is driving
+                            // both pages and the user is looking at them, so blur reads as lag; and
+                            // the gesture is seeked, so a blur that ramps with it would be left at
+                            // full strength at the moment of commit and snap to nothing.
                             //
                             // Read inside the layer block, which is a deferred draw-phase read:
                             // through `Modifier.blur` the radius would be a composition-time argument
@@ -594,23 +606,26 @@ fun WearXMusicRoot() {
                             // returns to zero when a transition finishes, which is what pinned a
                             // full-strength blur onto every settled page last time.
                             .graphicsLayer {
-                                val transitioning =
-                                    routeTransitionState.currentState != routeTransitionState.targetState
-                                val pushRunning = transitioning && navigatingForward
-                                val popRunning = transitioning && !navigatingForward && inPredictiveBack
-                                // Only the page being COVERED blurs — never the one being revealed,
-                                // whether that is a push or a gesture-driven back, because blurring a
-                                // page the finger is still holding reads as lag rather than depth.
-                                val isBehind =
-                                    when {
-                                        pushRunning -> route == routeTransitionState.currentState
-                                        popRunning -> route == routeTransitionState.targetState
-                                        else -> false
-                                    }
-                                val blur = if (isBehind) {
-                                    morphBlurPx * routeTransitionState.fraction.coerceIn(0f, 1f)
-                                } else {
-                                    0f
+                                val pushRunning = routeTransitionState.currentState !=
+                                    routeTransitionState.targetState && navigatingForward
+                                val isBehind = pushRunning && route == routeTransitionState.currentState
+                                val isArriving = pushRunning && route == routeTransitionState.targetState
+                                val blur = when {
+                                    // Depth of field: the page being covered ramps up to the
+                                    // configured radius and relaxes as it is uncovered.
+                                    isBehind ->
+                                        morphBlurPx * routeTransitionState.fraction.coerceIn(0f, 1f)
+
+                                    // The page arriving starts barely soft and comes fully into
+                                    // focus by the time it has grown. One dp is below the threshold
+                                    // of "this looks broken" on a 454 px dial; it exists to take the
+                                    // hard edge off a scaled-up page, not to be noticed — so it ramps
+                                    // out rather than sitting there.
+                                    isArriving ->
+                                        IncomingPageBlur.toPx() *
+                                            (1f - routeTransitionState.fraction.coerceIn(0f, 1f))
+
+                                    else -> 0f
                                 }
                                 // No API-level guard: `RenderEffect` is documented as a no-op below
                                 // Android 12, which is the same deal `Modifier.blur` has.
@@ -683,18 +698,10 @@ private fun LoadingIndicator() {
  * This one answers the tap immediately and then settles.
  *
  * The trade is the tail: the last third of the duration carries the final 1 %, so if the settle
- * feels like a hover, shorten [RouteTransitionMs] rather than reaching for another curve.
+ * feels like a hover, shorten [AppSettings.TRANSITION_DURATION_CHOICES] rather than reaching for
+ * another curve — it is a setting for exactly this.
  */
 private val RouteEasing = CubicBezierEasing(0.23f, 1f, 0.32f, 1f)
-/**
- * How long a page transition runs. Slowed from 420 ms to 560 ms at the user's request: with the
- * scale now driven by the transition itself, a longer clock is what turns the growth from "quick"
- * into "unhurried", and the overshoot at the end gets more time to read as a settle rather than a
- * flick. It drives the push's `scaleIn` tween, the play head and the pushed-origin cleanup together,
- * so they cannot drift apart.
- */
-private const val RouteTransitionMs = 560
-
 /** How long the palette takes to shift to a new track's cover. See the note where it is used. */
 private const val ThemeShiftMs = 320
 
@@ -752,13 +759,23 @@ private const val MorphRingAmount = 0.025f
 private val OriginDiameter = 40.dp
 
 /**
+ * The blur a page carries as it starts arriving, ramping to nothing as it settles. Small on
+ * purpose: it takes the hard edge off a page that is being scaled up without being noticeable.
+ */
+private val IncomingPageBlur = 1.dp
+
+/**
  * The page being replaced during a push: it swells a little and fades, so the new page reads as
  * coming forward over it. This is the exit half of Material's container transform — no travel,
  * because travel would compete with the growing circle.
  */
-private val RouteExit =
-    scaleOut(targetScale = 1.05f, animationSpec = tween(RouteTransitionMs, easing = RouteEasing)) +
-        fadeOut(animationSpec = tween(RouteTransitionMs, easing = RouteEasing))
+// These are FUNCTIONS rather than vals because the duration is a setting: a top-level `val` would
+// be computed once when the file's class initialises, long before any setting exists, and every
+// page would open at the compiled-in speed. Taking the duration as a parameter is what lets one
+// number scale the growth, the exit and the play head together.
+private fun routeExit(durationMs: Int): ExitTransition =
+    scaleOut(targetScale = 1.05f, animationSpec = tween(durationMs, easing = RouteEasing)) +
+        fadeOut(animationSpec = tween(durationMs, easing = RouteEasing))
 
 /**
  * Back: a full width out to the right while shrinking, with the page being returned to coming in
@@ -767,21 +784,21 @@ private val RouteExit =
  * for the reason on [BackEasing], and the duration is ours (Wear's `tween` default of 300 ms only
  * covers the commit hand-off, which is over well before this finishes).
  */
-private val RoutePopEnter =
-    scaleIn(initialScale = 0.8f, animationSpec = tween(RouteTransitionMs, easing = BackEasing)) +
+private fun routePopEnter(durationMs: Int): EnterTransition =
+    scaleIn(initialScale = 0.8f, animationSpec = tween(durationMs, easing = BackEasing)) +
         slideInHorizontally(
             initialOffsetX = { -it / 2 },
-            animationSpec = tween(RouteTransitionMs, easing = BackEasing),
+            animationSpec = tween(durationMs, easing = BackEasing),
         ) +
-        fadeIn(initialAlpha = 0.5f, animationSpec = tween(RouteTransitionMs, easing = BackEasing))
-private val RoutePopExit =
+        fadeIn(initialAlpha = 0.5f, animationSpec = tween(durationMs, easing = BackEasing))
+private fun routePopExit(durationMs: Int): ExitTransition =
     slideOutHorizontally(
         targetOffsetX = { it },
-        animationSpec = tween(RouteTransitionMs, easing = BackEasing),
+        animationSpec = tween(durationMs, easing = BackEasing),
     ) +
         scaleOut(
             targetScale = 0.8f,
-            animationSpec = tween(RouteTransitionMs, easing = BackEasing),
+            animationSpec = tween(durationMs, easing = BackEasing),
         )
 
 /**
@@ -789,7 +806,7 @@ private val RoutePopExit =
  * of the pressed point on its own clock and the head has to stay long enough to carry the outgoing
  * page's exit with it.
  */
-private val RouteSettleSpec = tween<Float>(durationMillis = RouteTransitionMs, easing = LinearEasing)
+private fun routeSettleSpec(durationMs: Int) = tween<Float>(durationMs, easing = LinearEasing)
 
 /**
  * The play head for a pop that is finishing — a committed gesture, or an abandoned one gliding back.
