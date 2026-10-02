@@ -580,20 +580,28 @@ fun WearXMusicRoot() {
                             // outer one, so what gets scaled is already a circle.
                             .clip(CircleShape)
                             .background(MaterialTheme.colorScheme.background)
-                            // The page coming into focus as the container transform runs. Read from
-                            // the TRANSITION's fraction inside the layer block, which is a deferred
-                            // draw-phase read: doing this through `Modifier.blur` would mean reading
-                            // the progress in a modifier argument and recomposing the whole page on
-                            // every frame of the transition.
+                            // The page coming into focus as the container transform runs. Read inside
+                            // the layer block, which is a deferred draw-phase read: doing this through
+                            // `Modifier.blur` would mean reading the progress in a modifier argument
+                            // and recomposing the whole page on every frame of the transition.
                             //
                             // Only on a push. A pop is driven by the back gesture, and blurring a
                             // page the finger is still holding reads as lag rather than as focus.
                             // Assigned unconditionally so a frame that should not blur cannot inherit
                             // the previous frame's effect.
                             .graphicsLayer {
-                                val progress = routeTransitionState.fraction
-                                val blur = if (navigatingForward && !inPredictiveBack) {
-                                    morphBlurPx * (1f - progress.coerceIn(0f, 1f))
+                                // Whether a transition is actually running, NOT what the fraction
+                                // happens to be at rest. The fraction is a play head: it returns to
+                                // zero once a transition finishes, so testing it for "is this a
+                                // push" left the condition permanently true on a settled page and
+                                // every page sat at full blur. The transition is running exactly when
+                                // its two states differ.
+                                val inPush = navigatingForward &&
+                                    !inPredictiveBack &&
+                                    routeTransitionState.currentState != routeTransitionState.targetState &&
+                                    route == routeTransitionState.targetState
+                                val blur = if (inPush) {
+                                    morphBlurPx * (1f - routeTransitionState.fraction.coerceIn(0f, 1f))
                                 } else {
                                     0f
                                 }
