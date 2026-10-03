@@ -39,21 +39,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.itemsIndexed
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
-import com.wearx.music.ui.components.NoEdgeFadeScaling
-import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.ScreenBackButton
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.material3.CompactButton
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.SolidColor
@@ -81,7 +82,8 @@ fun SearchScreen(
     var query by rememberSaveable { mutableStateOf("") }
     val keyboard = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     val trimmed = query.trim()
     val matchingTracks = remember(trimmed, tracks) {
@@ -95,11 +97,13 @@ fun SearchScreen(
         }
     }
 
-    ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+    ScreenScaffold(
+        scrollState = scrollState,
+        edgeButton = { ScreenBackButton(onClick = onBack) },
+    ) { padding ->
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
-            scalingParams = NoEdgeFadeScaling,
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -190,6 +194,8 @@ fun SearchScreen(
                     subtitle = track.artist.ifBlank { stringResource(R.string.label_unknown_artist) },
                     artUri = track.artUri ?: artByTrackId[track.id],
                     onClick = { onTrackClick(track) },
+                    transformation = SurfaceTransformation(transformationSpec),
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
                 )
             }
 
@@ -199,13 +205,11 @@ fun SearchScreen(
                     subtitle = album.artist.ifBlank { stringResource(R.string.label_unknown_artist) },
                     artUri = album.artUri,
                     onClick = { onAlbumClick(album) },
+                    transformation = SurfaceTransformation(transformationSpec),
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
                 )
             }
-
-            // Room for the pinned back button — see ScreenBackButton.
-            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
-        ScreenBackButton(onClick = onBack)
     }
 
     // Bringing the keyboard up on entry is the whole point of the screen; a tap to focus first is a
@@ -226,8 +230,14 @@ private fun SearchResultRow(
     subtitle: String,
     artUri: Uri?,
     onClick: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
 ) {
-    Card(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.fillMaxWidth(),
+        transformation = transformation,
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,

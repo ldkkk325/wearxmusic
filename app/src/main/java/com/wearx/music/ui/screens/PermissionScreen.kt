@@ -11,13 +11,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 
 /** Shown when the audio-read permission has not been granted yet. */
@@ -26,9 +29,10 @@ fun PermissionScreen(
     permanentlyDenied: Boolean,
     onRequestPermission: () -> Unit,
 ) {
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
     ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
             contentPadding = padding,
@@ -61,9 +65,12 @@ fun PermissionScreen(
             item {
                 Button(
                     onClick = onRequestPermission,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .transformedHeight(this, transformationSpec)
+                        .fillMaxWidth(),
                     icon = { Icon(Icons.Filled.LibraryMusic, contentDescription = null) },
                     label = { Text(stringResource(R.string.permission_grant)) },
+                    transformation = SurfaceTransformation(transformationSpec),
                 )
             }
         }

@@ -23,18 +23,20 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.items
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 import com.wearx.music.ui.SettingsSection
-import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.rememberTapFeedback
 
 /**
@@ -46,13 +48,13 @@ import com.wearx.music.ui.components.rememberTapFeedback
  */
 @Composable
 fun SettingsScreen(onOpenSection: (SettingsSection) -> Unit) {
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
     ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
-            scalingParams = NoEdgeFadeScaling,
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -65,7 +67,12 @@ fun SettingsScreen(onOpenSection: (SettingsSection) -> Unit) {
                 }
             }
             items(SETTINGS_SECTIONS) { entry ->
-                SectionRow(entry = entry, onClick = { onOpenSection(entry.section) })
+                SectionRow(
+                    entry = entry,
+                    onClick = { onOpenSection(entry.section) },
+                    transformation = SurfaceTransformation(transformationSpec),
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                )
             }
             item { Spacer(Modifier.height(12.dp)) }
         }
@@ -73,14 +80,20 @@ fun SettingsScreen(onOpenSection: (SettingsSection) -> Unit) {
 }
 
 @Composable
-private fun SectionRow(entry: SettingsSectionEntry, onClick: () -> Unit) {
+private fun SectionRow(
+    entry: SettingsSectionEntry,
+    onClick: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
+) {
     val tapFeedback = rememberTapFeedback()
     Card(
         onClick = {
             tapFeedback()
             onClick()
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        transformation = transformation,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),

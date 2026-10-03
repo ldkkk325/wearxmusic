@@ -22,21 +22,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 import com.wearx.music.data.PlaybackMode
 import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.MorphGroupIconButton
-import com.wearx.music.ui.components.BackButtonReservedHeight
-import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.ui.labelRes
 
@@ -55,13 +56,16 @@ fun MoreScreen(
     onCyclePlaybackMode: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+    ScreenScaffold(
+        scrollState = scrollState,
+        edgeButton = { ScreenBackButton(onClick = onBack) },
+    ) { padding ->
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
-            scalingParams = NoEdgeFadeScaling,
             contentPadding = padding,
         ) {
             item {
@@ -74,7 +78,10 @@ fun MoreScreen(
             }
 
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.transformedHeight(this, transformationSpec).fillMaxWidth(),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
                     Text(
                         text = stringResource(R.string.more_seek),
                         style = MaterialTheme.typography.titleSmall,
@@ -107,7 +114,10 @@ fun MoreScreen(
             }
 
             item {
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.transformedHeight(this, transformationSpec).fillMaxWidth(),
+                    transformation = SurfaceTransformation(transformationSpec),
+                ) {
                     Text(
                         text = stringResource(R.string.more_mode),
                         style = MaterialTheme.typography.titleSmall,
@@ -152,9 +162,6 @@ fun MoreScreen(
                 }
             }
 
-            // Room for the pinned back button — see ScreenBackButton.
-            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
-        ScreenBackButton(onClick = onBack)
     }
 }

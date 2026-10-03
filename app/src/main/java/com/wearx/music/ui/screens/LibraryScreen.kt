@@ -44,9 +44,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.itemsIndexed
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.ButtonGroupDefaults
 import androidx.wear.compose.material3.Card
@@ -54,11 +54,15 @@ import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.RevealValue
 import androidx.wear.compose.material3.SwipeToReveal
 import androidx.wear.compose.material3.SwipeToRevealDefaults
 import androidx.wear.compose.material3.rememberRevealState
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.TransformationSpec
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 import kotlinx.coroutines.launch
 import com.wearx.music.data.SortMode
@@ -69,7 +73,6 @@ import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.MorphGroupIconButton
-import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.rememberTapFeedback
 import com.wearx.music.util.formatDuration
 
@@ -99,15 +102,15 @@ fun LibraryScreen(
     onOpenNowPlaying: () -> Unit,
     onRescan: () -> Unit,
 ) {
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
     var showTracks by rememberSaveable { mutableStateOf(true) }
 
     ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
             verticalArrangement = Arrangement.spacedBy(3.dp),
-            scalingParams = NoEdgeFadeScaling,
             contentPadding = padding,
         ) {
             if (playback.hasMedia) {
@@ -116,6 +119,8 @@ fun LibraryScreen(
                         playback = playback,
                         onOpen = onOpenNowPlaying,
                         onTogglePlay = onTogglePlay,
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier.transformedHeight(this, transformationSpec),
                     )
                 }
             }
@@ -209,6 +214,8 @@ fun LibraryScreen(
                         isPlaying = playback.isPlaying,
                         onClick = { onTrackClick(track) },
                         onPlayNext = { onPlayNext(track) },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier.transformedHeight(this, transformationSpec),
                     )
                 }
             } else {
@@ -216,6 +223,8 @@ fun LibraryScreen(
                     AlbumRow(
                         album = album,
                         onClick = { onAlbumClick(album) },
+                        transformation = SurfaceTransformation(transformationSpec),
+                        modifier = Modifier.transformedHeight(this, transformationSpec),
                     )
                 }
             }
@@ -240,8 +249,9 @@ fun LibraryScreen(
                 item {
                     MorphButton(
                         onClick = onRescan,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.transformedHeight(this, transformationSpec).fillMaxWidth(),
                         enabled = !isRescanning,
+                        transformation = SurfaceTransformation(transformationSpec),
                         icon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                         label = {
                             Text(
@@ -265,6 +275,8 @@ private fun NowPlayingBar(
     playback: PlayerUiState,
     onOpen: () -> Unit,
     onTogglePlay: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
 ) {
     val tapFeedback = rememberTapFeedback()
     Card(
@@ -272,7 +284,8 @@ private fun NowPlayingBar(
             tapFeedback()
             onOpen()
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        transformation = transformation,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -322,14 +335,20 @@ private fun NowPlayingBar(
 }
 
 @Composable
-private fun AlbumRow(album: Album, onClick: () -> Unit) {
+private fun AlbumRow(
+    album: Album,
+    onClick: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
+) {
     val tapFeedback = rememberTapFeedback()
     Card(
         onClick = {
             tapFeedback()
             onClick()
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        transformation = transformation,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -385,6 +404,8 @@ private fun TrackRow(
     isPlaying: Boolean,
     onClick: () -> Unit,
     onPlayNext: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
 ) {
     val revealState = rememberRevealState()
     val revealScope = rememberCoroutineScope()
@@ -424,6 +445,7 @@ private fun TrackRow(
             isCurrent = isCurrent,
             isPlaying = isPlaying,
             onClick = onClick,
+            transformation = transformation,
         )
     }
 }
@@ -435,6 +457,8 @@ private fun TrackRowContent(
     isCurrent: Boolean,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
 ) {
     val tapFeedback = rememberTapFeedback()
     Card(
@@ -442,7 +466,8 @@ private fun TrackRowContent(
             tapFeedback()
             onClick()
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        transformation = transformation,
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),

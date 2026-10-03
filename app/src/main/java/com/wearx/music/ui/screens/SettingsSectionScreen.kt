@@ -20,9 +20,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
-import androidx.wear.compose.foundation.lazy.ScalingLazyListScope
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.Icon
@@ -31,14 +31,16 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.SplitSwitchButton
+import androidx.wear.compose.material3.SurfaceTransformation
+import androidx.wear.compose.material3.lazy.TransformationSpec
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 import com.wearx.music.data.AppSettings
 import com.wearx.music.data.ThemeMode
 import com.wearx.music.ui.SettingsSection
 import com.wearx.music.ui.components.MorphGroupIconButton
-import com.wearx.music.ui.components.BackButtonReservedHeight
-import com.wearx.music.ui.components.NoEdgeFadeScaling
 import com.wearx.music.ui.components.ScreenBackButton
 import kotlin.math.roundToInt
 
@@ -62,13 +64,16 @@ fun SettingsSectionScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onBack: () -> Unit,
 ) {
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+    ScreenScaffold(
+        scrollState = scrollState,
+        edgeButton = { ScreenBackButton(onClick = onBack) },
+    ) { padding ->
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
-            scalingParams = NoEdgeFadeScaling,
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
@@ -82,6 +87,7 @@ fun SettingsSectionScreen(
             }
             when (section) {
                 SettingsSection.APPEARANCE -> appearanceSection(
+                    transformationSpec = transformationSpec,
                     settings = settings,
                     onUiScaleChange = onUiScaleChange,
                     onDynamicColorChange = onDynamicColorChange,
@@ -89,22 +95,17 @@ fun SettingsSectionScreen(
                 )
 
                 SettingsSection.MOTION -> motionSection(
+                    transformationSpec = transformationSpec,
                     settings = settings,
                     onReduceMotionChange = onReduceMotionChange,
                     onTransitionDurationChange = onTransitionDurationChange,
                     onMorphBlurChange = onMorphBlurChange,
                 )
 
-                SettingsSection.PLAYBACK -> playbackSection()
-                SettingsSection.ABOUT -> aboutSection(settings = settings, versionName = versionName)
-            }
-
-            item {
-                // Room for the pinned back button — see ScreenBackButton.
-                Spacer(Modifier.height(BackButtonReservedHeight))
+                SettingsSection.PLAYBACK -> playbackSection(transformationSpec)
+                SettingsSection.ABOUT -> aboutSection(transformationSpec, settings, versionName)
             }
         }
-        ScreenBackButton(onClick = onBack)
     }
 }
 
@@ -115,7 +116,8 @@ private fun SettingsSection.titleRes(): Int = when (this) {
     SettingsSection.ABOUT -> R.string.settings_group_about
 }
 
-private fun ScalingLazyListScope.appearanceSection(
+private fun TransformingLazyColumnScope.appearanceSection(
+    transformationSpec: TransformationSpec,
     settings: AppSettings,
     onUiScaleChange: (Float) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
@@ -123,7 +125,7 @@ private fun ScalingLazyListScope.appearanceSection(
 ) {
     val scales = AppSettings.UI_SCALE_CHOICES
     val scaleIndex = scales.indexOfFirst { it == settings.uiScale }.takeIf { it >= 0 } ?: 1
-    group {
+    group(transformationSpec) {
         sliderRow(
             titleRes = R.string.settings_theme_mode,
             value = stringResource(
@@ -150,13 +152,14 @@ private fun ScalingLazyListScope.appearanceSection(
     }
 }
 
-private fun ScalingLazyListScope.motionSection(
+private fun TransformingLazyColumnScope.motionSection(
+    transformationSpec: TransformationSpec,
     settings: AppSettings,
     onReduceMotionChange: (Boolean) -> Unit,
     onTransitionDurationChange: (Int) -> Unit,
     onMorphBlurChange: (Int) -> Unit,
 ) {
-    group {
+    group(transformationSpec) {
         switchRow(
             titleRes = R.string.settings_reduce_motion,
             checked = settings.reduceMotion,
@@ -196,8 +199,8 @@ private fun ScalingLazyListScope.motionSection(
 }
 
 /** Empty on purpose: nothing about playback is configurable yet, and this is where it will land. */
-private fun ScalingLazyListScope.playbackSection() {
-    group {
+private fun TransformingLazyColumnScope.playbackSection(transformationSpec: TransformationSpec) {
+    group(transformationSpec) {
         Text(
             text = stringResource(R.string.settings_group_playback_summary),
             style = MaterialTheme.typography.bodySmall,
@@ -206,8 +209,8 @@ private fun ScalingLazyListScope.playbackSection() {
     }
 }
 
-private fun ScalingLazyListScope.aboutSection(settings: AppSettings, versionName: String) {
-    group {
+private fun TransformingLazyColumnScope.aboutSection(transformationSpec: TransformationSpec, settings: AppSettings, versionName: String) {
+    group(transformationSpec) {
         Text(
             text = stringResource(R.string.settings_version, versionName),
             style = MaterialTheme.typography.bodySmall,
@@ -222,9 +225,15 @@ private fun ScalingLazyListScope.aboutSection(settings: AppSettings, versionName
 }
 
 /** One card holding the whole group; the section's own title is the list header above it. */
-private fun ScalingLazyListScope.group(content: @Composable ColumnScope.() -> Unit) {
+private fun TransformingLazyColumnScope.group(
+    transformationSpec: TransformationSpec,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     item {
-        Card(modifier = Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.transformedHeight(this, transformationSpec),
+            transformation = SurfaceTransformation(transformationSpec),
+        ) {
             Column(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                 content = content,

@@ -19,6 +19,7 @@ import androidx.wear.compose.material3.ButtonColors
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.ButtonGroupScope
 import androidx.wear.compose.material3.CompactButton
+import androidx.wear.compose.material3.SurfaceTransformation
 import kotlin.math.roundToInt
 
 /**
@@ -45,6 +46,7 @@ fun MorphButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     colors: ButtonColors = ButtonDefaults.buttonColors(),
+    transformation: SurfaceTransformation? = null,
     icon: @Composable BoxScope.() -> Unit = {},
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -61,6 +63,7 @@ fun MorphButton(
         interactionSource = interactionSource,
         icon = icon,
         label = label,
+        transformation = transformation,
     )
 }
 

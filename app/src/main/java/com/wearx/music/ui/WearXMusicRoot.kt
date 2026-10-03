@@ -206,17 +206,29 @@ fun WearXMusicRoot() {
         }
     }
 
+    // A back that is committed more than once in a single gesture — predictive-back and a second
+    // tap on the edge button, say — would drop two routes. The commit is accepted only until the
+    // transition has landed, which is where the flag is re-armed.
+    var backCommitAllowed by remember { mutableStateOf(true) }
+
     fun navigate(route: Route) {
         navigatingForward = true
         pushOrigin = lastPress
         pushStartScale = pressStartScale
         pushedRoute = route
+        backCommitAllowed = true
         backStack.add(route)
     }
 
     fun goBack() {
         navigatingForward = false
         if (backStack.size > 1) backStack.removeAt(backStack.lastIndex)
+    }
+
+    fun commitBack() {
+        if (!backCommitAllowed) return
+        backCommitAllowed = false
+        goBack()
     }
 
     fun play(track: Track) {
@@ -284,7 +296,7 @@ fun WearXMusicRoot() {
                 // Popping is all that is needed. The transition already targets the previous route,
                 // so the navigation path below carries it the rest of the way from wherever the
                 // finger left it — one continuous motion, with no restart and no snap back.
-                goBack()
+                commitBack()
             } else if (!reduceMotion) {
                 // The gesture was cancelled. This coroutine is cancelled too, so the glide back has
                 // to run in the screen's scope; it drives the same transition object, so nothing can
@@ -305,27 +317,33 @@ fun WearXMusicRoot() {
 
     // Any navigation that did not come from the gesture — taps, and the pop the gesture committed —
     // finishes the same transition object, so the seeked position is carried into the animation.
+    //
+    // Always retarget, never skip on `currentState == current`: mid-push the seekable state's
+    // current is still the page we left, so a back tap during the circle-in saw "already there",
+    // left the push running, and re-armed the guard — the next tap popped again.
     LaunchedEffect(current) {
-        if (routeTransitionState.currentState != current) {
-            when {
-                reduceMotion -> routeTransitionState.snapTo(current)
+        when {
+            reduceMotion -> routeTransitionState.snapTo(current)
 
-                // A push is not finishing a hand-off. The page is growing out of the pressed point on
-                // its own clock, so the play head has to stay long enough to carry the outgoing page's
-                // exit along with it; shortening this would cut the growth off mid-way and leave the
-                // circle expanding over nothing.
-                navigatingForward -> routeTransitionState.animateTo(current, routeSettleSpec(routeTransitionMs))
+            // A push is not finishing a hand-off. The page is growing out of the pressed point on
+            // its own clock, so the play head has to stay long enough to carry the outgoing page's
+            // exit along with it; shortening this would cut the growth off mid-way and leave the
+            // circle expanding over nothing.
+            navigatingForward -> routeTransitionState.animateTo(current, routeSettleSpec(routeTransitionMs))
 
-                // A committed pop has only the tail left, and the finger is already off the glass —
-                // this is the half-second of "the page is still creeping" that reads as slow. Time it
-                // to the distance that is actually left, with a floor so a late release cannot turn
-                // the hand-off into a jump.
-                else -> {
-                    val remaining = (1f - routeTransitionState.fraction).coerceIn(0f, 1f)
-                    routeTransitionState.animateTo(current, settleSpec(remaining))
-                }
+            // A committed pop has only the tail left, and the finger is already off the glass —
+            // this is the half-second of "the page is still creeping" that reads as slow. Time it
+            // to the distance that is actually left, with a floor so a late release cannot turn
+            // the hand-off into a jump.
+            else -> {
+                val remaining = (1f - routeTransitionState.fraction).coerceIn(0f, 1f)
+                routeTransitionState.animateTo(current, settleSpec(remaining))
             }
         }
+        // Re-armed only once the transition has actually landed. An earlier arm on `current`
+        // change left the door open mid-animation, so a second back tap during the circle-in
+        // popped again and the stack drained further than the user asked for.
+        backCommitAllowed = true
     }
 
     // Global UI scale: overriding LocalDensity rescales every dp and sp in the tree at once.
@@ -422,7 +440,7 @@ fun WearXMusicRoot() {
                                     nowPlayingMediaId = playback.mediaId,
                                     onPlayAll = { playFromAlbum(album) },
                                     onTrackClick = ::play,
-                                    onBack = { goBack() },
+                                    onBack = { commitBack() },
                                 )
                             }
                         }
@@ -444,10 +462,10 @@ fun WearXMusicRoot() {
                             state = playback,
                             onSeekBy = app.player::seekBy,
                             onCyclePlaybackMode = app.player::cyclePlaybackMode,
-                            onBack = { goBack() },
+                            onBack = { commitBack() },
                         )
 
-                        Route.Volume -> VolumeScreen(onBack = { goBack() })
+                        Route.Volume -> VolumeScreen(onBack = { commitBack() })
 
                         Route.Search -> SearchScreen(
                             tracks = tracks,
@@ -455,7 +473,7 @@ fun WearXMusicRoot() {
                             artByTrackId = artByTrackId,
                             onTrackClick = ::play,
                             onAlbumClick = { album -> navigate(Route.AlbumDetail(album.id)) },
-                            onBack = { goBack() },
+                            onBack = { commitBack() },
                         )
 
                         Route.Settings -> SettingsScreen(
@@ -474,7 +492,7 @@ fun WearXMusicRoot() {
                             onMorphBlurChange = app.settings::setMorphBlurIndex,
                             onTransitionDurationChange = app.settings::setTransitionDurationIndex,
                             onThemeModeChange = app.settings::setThemeMode,
-                            onBack = { goBack() },
+                            onBack = { commitBack() },
                         )
                 }
             }
@@ -504,6 +522,10 @@ fun WearXMusicRoot() {
             // for the first time, so a frame or two can pass before it covers anything. With this
             // underneath, the worst case is that a gap shows the page background instead of the
             // window, which cannot be perceived as a hole.
+            //
+            // No `SwipeToDismissBox` here on purpose. With `enableOnBackInvokedCallback` the
+            // left-edge swipe is already delivered as a predictive-back gesture to the handler
+            // above, and a second box competing for the same drag is what made the dismiss crash.
             Box(
                 modifier = Modifier
                     .fillMaxSize()

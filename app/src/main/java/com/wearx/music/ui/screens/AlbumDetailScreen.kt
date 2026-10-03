@@ -2,10 +2,10 @@ package com.wearx.music.ui.screens
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -18,22 +18,23 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
+import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.itemsIndexed
-import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.rememberTransformationSpec
+import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.AlbumArtwork
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.MorphButton
-import com.wearx.music.ui.components.NoEdgeFadeScaling
-import com.wearx.music.ui.components.BackButtonReservedHeight
 import com.wearx.music.ui.components.ScreenBackButton
 import com.wearx.music.util.formatDuration
 
@@ -46,13 +47,16 @@ fun AlbumDetailScreen(
     onTrackClick: (Track) -> Unit,
     onBack: () -> Unit,
 ) {
-    val scrollState = rememberScalingLazyListState()
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
 
-    ScreenScaffold(scrollState = scrollState) { padding ->
-        ScalingLazyColumn(
+    ScreenScaffold(
+        scrollState = scrollState,
+        edgeButton = { ScreenBackButton(onClick = onBack) },
+    ) { padding ->
+        TransformingLazyColumn(
             modifier = Modifier.fillMaxSize(),
             state = scrollState,
-            scalingParams = NoEdgeFadeScaling,
             contentPadding = padding,
         ) {
             item {
@@ -85,15 +89,17 @@ fun AlbumDetailScreen(
             item {
                 MorphButton(
                     onClick = onPlayAll,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.transformedHeight(this, transformationSpec).fillMaxWidth(),
                     icon = { Icon(Icons.Filled.PlayArrow, contentDescription = null) },
                     label = { Text(stringResource(R.string.action_play)) },
+                    transformation = SurfaceTransformation(transformationSpec),
                 )
             }
             itemsIndexed(album.tracks, key = { _, track -> track.id }) { index, track ->
                 Card(
                     onClick = { onTrackClick(track) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.transformedHeight(this, transformationSpec).fillMaxWidth(),
+                    transformation = SurfaceTransformation(transformationSpec),
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -132,9 +138,6 @@ fun AlbumDetailScreen(
                     }
                 }
             }
-            // Room for the pinned back button — see ScreenBackButton.
-            item { Spacer(Modifier.height(BackButtonReservedHeight)) }
         }
-        ScreenBackButton(onClick = onBack)
     }
 }
