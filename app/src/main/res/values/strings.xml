@@ -147,5 +147,6 @@
     <string name="onboarding_shape_round_hint">表盘为圆的手表，页面按圆形裁切</string>
     <string name="onboarding_shape_square">方形屏幕</string>
     <string name="onboarding_shape_square_hint">表盘为方的手表，页面按矩形铺满</string>
+    <string name="onboarding_welcome_title">欢迎</string>
     <string name="onboarding_enter">进入</string>
 </resources>
