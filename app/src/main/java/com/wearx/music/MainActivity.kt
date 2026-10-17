@@ -25,6 +25,8 @@ class MainActivity : ComponentActivity() {
                     ThemeMode.DARK -> true
                     ThemeMode.LIGHT -> false
                 },
+                // One switch for every source of dynamic colour: wallpaper AND current artwork.
+                dynamicColor = settings.dynamicColor,
             ) {
                 WearXMusicRoot()
             }

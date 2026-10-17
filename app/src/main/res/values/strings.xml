@@ -24,7 +24,8 @@
     <string name="permission_title">需要读取音频权限</string>
     <string name="permission_rationale">WearX Music 需要访问手表上的音频文件，才能建立音乐库并播放。</string>
     <string name="permission_grant">授予权限</string>
-    <string name="permission_denied">权限被拒绝，无法扫描音乐库。</string>
+    <string name="permission_denied">权限已被系统拒绝，需前往系统设置手动授予。</string>
+    <string name="permission_open_settings">打开系统设置</string>
 
     <string name="action_play">播放</string>
     <string name="action_pause">暂停</string>
@@ -78,7 +79,7 @@
     <string name="more_mode_value">当前：%1$s</string>
     <string name="repeat_off_state">不循环</string>
     <string name="settings_dynamic_color">动态取色</string>
-    <string name="settings_dynamic_color_hint">控件颜色跟随当前封面</string>
+    <string name="settings_dynamic_color_hint">控件颜色跟随手表壁纸与当前封面</string>
     <string name="settings_ui_scale">界面缩放</string>
     <string name="tab_sort">排序</string>
     <string name="sort_title">按曲名</string>
@@ -94,7 +95,10 @@
     <string name="settings_group_motion">动效</string>
     <string name="settings_group_motion_summary">页面打开方式与动画</string>
     <string name="settings_group_playback">播放</string>
-    <string name="settings_group_playback_summary">暂无可调项，播放相关设置会加在这里</string>
+    <string name="settings_group_playback_summary">音乐库扫描与歌词文件访问</string>
+    <string name="settings_lrc_title">旁挂 .lrc 歌词</string>
+    <string name="settings_lrc_on">已开启所有文件访问，可读取歌曲旁的歌词文件</string>
+    <string name="settings_lrc_off">未开启，需授予所有文件访问后生效（点此前往）</string>
     <string name="settings_group_about">关于</string>
     <string name="settings_group_about_summary">版本信息</string>
     <string name="settings_theme_mode">主题</string>
@@ -132,4 +136,16 @@
     <string name="lyrics_no_track">当前没有播放中的歌曲</string>
     <string name="lyrics_loading">正在读取歌词…</string>
     <string name="lyrics_untimed">无时间轴歌词</string>
+
+    <!-- 引导流程 -->
+    <string name="onboarding_terms_title">用户协议与隐私说明</string>
+    <string name="onboarding_terms_body">欢迎使用 WearX Music。\n\n1. 本应用是本地音乐播放器：歌曲、封面与歌词只在您的手表本地读取与解析，不会上传到任何服务器。\n2. 应用本身不联网、不收集个人信息、不含广告。\n3. 建立音乐库需要「读取音频」权限；如需读取歌曲旁的 .lrc 歌词文件，可另行在设置中授予「所有文件访问」。\n4. 继续使用即表示您已阅读并同意以上说明；若不同意，请退出应用。\n</string>
+    <string name="onboarding_agree">同意并继续</string>
+    <string name="onboarding_disagree">不同意并退出</string>
+    <string name="onboarding_shape_title">选择屏幕类型</string>
+    <string name="onboarding_shape_round">圆形屏幕</string>
+    <string name="onboarding_shape_round_hint">表盘为圆的手表，页面按圆形裁切</string>
+    <string name="onboarding_shape_square">方形屏幕</string>
+    <string name="onboarding_shape_square_hint">表盘为方的手表，页面按矩形铺满</string>
+    <string name="onboarding_enter">进入</string>
 </resources>

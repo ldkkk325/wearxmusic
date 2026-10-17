@@ -2,10 +2,10 @@ package com.wearx.music.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
@@ -50,12 +50,23 @@ class PlayerConnection(
     private val _state = MutableStateFlow(PlayerUiState())
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
 
+    /** The play head, on its own stream so the 4 Hz poll does not recompose the whole app. */
+    private val _position = MutableStateFlow(PlayerPosition())
+    val position: StateFlow<PlayerPosition> = _position.asStateFlow()
+
     /**
      * Why playback last stopped on its own, kept outside the snapshot because it is a fact about
      * the player rather than something the UI sets. Cleared as soon as the user starts playback
      * again, so a stale reason can never sit under a running track.
      */
     private var interruption: PlaybackInterruption? = null
+
+    /**
+     * How many items have failed in a row. Drives the auto-skip in [Player.Listener.onPlayerError]:
+     * one pass through the queue of failures, then stop — otherwise a library of dead files would
+     * spin the player in a prepare/error loop forever.
+     */
+    private var failedItems = 0
 
     private val listener = object : Player.Listener {
         // `onEvents` is the catch-all callback, so one override keeps the snapshot in sync.
@@ -75,8 +86,26 @@ class PlayerConnection(
             }
         }
 
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            // A track that actually started playing ends the failure streak.
+            if (isPlaying) failedItems = 0
+        }
+
         override fun onPlayerError(error: PlaybackException) {
             interruption = PlaybackInterruption.ERROR
+            Log.w(TAG, "Playback error ${error.errorCodeName}", error)
+
+            // A corrupt or vanished file used to strand the queue on it: STATE_IDLE, nothing
+            // playing, and no way forward but pressing next by hand. Skip — guarded by
+            // `failedItems` so a whole library of dead files stops the queue rather than
+            // spinning through every one of them.
+            val player = controller ?: return
+            failedItems++
+            if (player.mediaItemCount > 1 && failedItems < player.mediaItemCount) {
+                advance(player)
+                player.prepare()
+            }
+            publish()
         }
     }
 
@@ -110,6 +139,7 @@ class PlayerConnection(
         controllerFuture?.let { MediaController.releaseFuture(it) }
         controllerFuture = null
         _state.value = PlayerUiState()
+        _position.value = PlayerPosition()
     }
 
     fun playPause() {
@@ -128,33 +158,55 @@ class PlayerConnection(
     /**
      * Advances to the next track, wrapping to the start of the queue.
      *
-     * Deliberately NOT `seekToNextMediaItem()` alone: Media3 computes the next index with
-     * `getRepeatModeForNavigation()`, which maps `REPEAT_MODE_ONE` onto `REPEAT_MODE_OFF`. In
-     * single-repeat at the last item that yields `INDEX_UNSET`, so `hasNextMediaItem()` is false —
-     * which is what used to disable this button and make "next" dead in loop mode.
+     * [Player.seekToNextMediaItem] is the only navigation that follows the shuffle order, so it is
+     * what runs whenever it can. The old hand-rolled `(currentMediaItemIndex + 1) % count` walked
+     * the *physical* list order — the timeline is never reordered by shuffle, only the navigation
+     * order is — so in shuffle mode "next" was really "the next song in the album", and the
+     * randomiser was a lie. See [advance].
      */
     fun next() {
         val player = controller ?: return
-        val count = player.mediaItemCount
-        if (count > 1) {
-            player.seekToDefaultPosition((player.currentMediaItemIndex + 1) % count)
-        } else {
-            player.seekToNextMediaItem()
-        }
+        advance(player)
         publish()
     }
 
-    /** Restarts the current track when past the intro, otherwise steps back (wrapping to the end). */
+    /**
+     * The single definition of "move to the next track" — used by [next] and by error recovery.
+     *
+     * Bypasses [Player.seekToNextMediaItem] in exactly the two places Media3 refuses to move:
+     *
+     *  - the last item under REPEAT_MODE_ONE, where `getRepeatModeForNavigation()` maps that mode
+     *    onto OFF and the next index comes back unset;
+     *  - a one-item queue, where "next" means restart.
+     */
+    private fun advance(player: Player) {
+        val count = player.mediaItemCount
+        when {
+            count == 0 -> return
+            count == 1 -> player.seekToDefaultPosition(0)
+            player.repeatMode == Player.REPEAT_MODE_ONE &&
+                player.currentMediaItemIndex == count - 1 -> player.seekToDefaultPosition(0)
+            else -> player.seekToNextMediaItem()
+        }
+    }
+
+    /**
+     * Restarts the current track when past the intro, otherwise steps back (wrapping to the end).
+     *
+     * Same shuffle rule as [next]: [Player.seekToPreviousMediaItem] is what follows the shuffle
+     * order backwards; only the first-item REPEAT_MODE_ONE case — where Media3 will not leave the
+     * item — is handled by hand.
+     */
     fun previous() {
         val player = controller ?: return
         val count = player.mediaItemCount
-        if (count > 1 && player.currentPosition <= RESTART_THRESHOLD_MS) {
-            val index = player.currentMediaItemIndex
-            player.seekToDefaultPosition(if (index - 1 < 0) count - 1 else index - 1)
-        } else if (count > 1) {
-            player.seekTo(0L)
-        } else {
-            player.seekToPreviousMediaItem()
+        when {
+            count == 0 -> return
+            player.currentPosition > RESTART_THRESHOLD_MS -> player.seekTo(0L)
+            count == 1 -> player.seekTo(0L)
+            player.repeatMode == Player.REPEAT_MODE_ONE &&
+                player.currentMediaItemIndex == 0 -> player.seekToDefaultPosition(count - 1)
+            else -> player.seekToPreviousMediaItem()
         }
         publish()
     }
@@ -225,12 +277,21 @@ class PlayerConnection(
         // `cyclePlaybackMode()`, which is also what makes it survive a restart.
 
         // Tapping the track that is already loaded must not restart it from the top — it should
-        // just carry on (or resume if paused). Only rebuild the queue when the selection actually
-        // changes.
+        // just carry on (or resume if paused).
         val alreadyLoaded = player.currentMediaItem?.mediaId == items[index].mediaId
         if (!alreadyLoaded) {
-            player.setMediaItems(items, index, /* startPositionMs = */ 0L)
-            player.prepare()
+            // Rebuilding a thousand MediaItems and parceling them over the binder is only worth
+            // it when the queue actually changed — and tapping a song in the library that is
+            // ALREADY the queue (the common case) is not a change. The id walk is O(n) string
+            // compares, which is nothing next to the rebuild it skips.
+            val sameQueue = player.mediaItemCount == items.size &&
+                (0 until items.size).all { player.getMediaItemAt(it).mediaId == items[it].mediaId }
+            if (sameQueue) {
+                player.seekToDefaultPosition(index)
+            } else {
+                player.setMediaItems(items, index, /* startPositionMs = */ 0L)
+                player.prepare()
+            }
         }
         player.play()
         publish()
@@ -240,6 +301,7 @@ class PlayerConnection(
         val player = controller
         if (player == null) {
             _state.value = PlayerUiState()
+            _position.value = PlayerPosition()
             return
         }
         // Read the metadata off the current MediaItem rather than `player.mediaMetadata`: the
@@ -256,9 +318,6 @@ class PlayerConnection(
             artist = metadata.artist?.toString(),
             album = metadata.albumTitle?.toString(),
             artworkUri = metadata.artworkUri,
-            positionMs = player.currentPosition.coerceAtLeast(0L),
-            durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L,
-            bufferedMs = player.bufferedPosition.coerceAtLeast(0L),
             shuffleEnabled = player.shuffleModeEnabled,
             repeatMode = player.repeatMode,
             // Derived from the queue size, not `hasNextMediaItem()` — see `next()` for why that
@@ -267,6 +326,14 @@ class PlayerConnection(
             hasPrevious = player.mediaItemCount > 0,
             queueSize = player.mediaItemCount,
             interruption = interruption,
+        )
+        // Written every call, but this flow is only collected by the progress ring, the time
+        // text and the lyrics — the low-frequency flow above stays quiet unless one of ITS
+        // fields actually changed (StateFlow drops equal values).
+        _position.value = PlayerPosition(
+            positionMs = player.currentPosition.coerceAtLeast(0L),
+            durationMs = player.duration.takeIf { it != C.TIME_UNSET && it > 0L } ?: 0L,
+            bufferedMs = player.bufferedPosition.coerceAtLeast(0L),
         )
     }
 
@@ -296,23 +363,18 @@ class PlayerConnection(
         }
     }
 
-    private fun Track.toMediaItem(): MediaItem =
-        MediaItem.Builder()
-            .setMediaId(id.toString())
-            .setUri(uri)
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(title)
-                    .setArtist(artist)
-                    .setAlbumTitle(album)
-                    .setArtworkUri(artUri ?: albumArtUri(albumId))
-                    .setIsPlayable(true)
-                    .setIsBrowsable(false)
-                    .build(),
-            )
-            .build()
+    private fun Track.toMediaItem(): MediaItem = buildMediaItem(
+        mediaId = id.toString(),
+        uri = uri,
+        title = title,
+        artist = artist,
+        album = album,
+        artworkUri = artUri ?: albumArtUri(albumId),
+    )
 
     private companion object {
+        private const val TAG = "PlayerConnection"
+
         /** Only the playing rate has to look continuous; the position genuinely moves. */
         const val POSITION_POLL_INTERVAL_PLAYING_MS = 250L
 

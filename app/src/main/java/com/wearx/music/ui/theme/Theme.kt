@@ -14,15 +14,22 @@ import com.wearx.music.ui.components.tonalSpotScheme
  * Material 3 Expressive theme for Wear OS.
  *
  * The palette is taken from the user's wallpaper ("Material You") whenever the platform can supply
- * one, and otherwise falls back to [ExpressiveFallbackScheme] — a hand-tuned, high-chroma dark
- * scheme in the spirit of M3 Expressive. Everything else (type scale, shapes, motion) comes from
- * the Wear Material 3 defaults, which already follow the Expressive design language.
+ * one — and whenever [dynamicColor] allows it; the app's "动态取色" switch is meant to be the one
+ * control over ALL of the dynamic theming, wallpaper included, not just the artwork tint it also
+ * gates. Without a wallpaper colour (or with the switch off) it falls back to
+ * [ExpressiveFallbackScheme] — a hand-tuned, high-chroma dark scheme in the spirit of M3
+ * Expressive. Everything else (type scale, shapes, motion) comes from the Wear Material 3
+ * defaults, which already follow the Expressive design language.
  */
 @Composable
-fun WearXMusicTheme(darkTheme: Boolean = true, content: @Composable () -> Unit) {
+fun WearXMusicTheme(
+    darkTheme: Boolean = true,
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit,
+) {
     val context = LocalContext.current
-    val colorScheme = remember(context, darkTheme) {
-        val dynamic = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    val colorScheme = remember(context, darkTheme, dynamicColor) {
+        val dynamic = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             dynamicColorScheme(context)
         } else {
             null

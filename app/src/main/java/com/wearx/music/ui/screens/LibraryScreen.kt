@@ -60,6 +60,7 @@ import androidx.wear.compose.material3.SwipeToReveal
 import androidx.wear.compose.material3.SwipeToRevealDefaults
 import androidx.wear.compose.material3.rememberRevealState
 import androidx.wear.compose.material3.Text
+import androidx.wear.compose.material3.lazy.ResponsiveTransformationSpec
 import androidx.wear.compose.material3.lazy.TransformationSpec
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
@@ -75,6 +76,26 @@ import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.MorphGroupIconButton
 import com.wearx.music.ui.components.rememberTapFeedback
 import com.wearx.music.util.formatDuration
+
+/**
+ * The library's "centre item stands out" curve: Wear's own small/large-screen shapes, but with a
+ * wider transition band — 45–75 % of the viewport height instead of the default 35–55 % (small)
+ * and 40–60 % (large). The scale-up and fade now ramp over a longer stretch of the scroll, so the
+ * prominence eases in and out rather than snapping around the middle of the dial.
+ */
+private val LibraryTransformationSpecs = arrayOf(
+    ResponsiveTransformationSpec.smallScreen(
+        minTransitionAreaHeightFraction = LibraryMinTransitionArea,
+        maxTransitionAreaHeightFraction = LibraryMaxTransitionArea,
+    ),
+    ResponsiveTransformationSpec.largeScreen(
+        minTransitionAreaHeightFraction = LibraryMinTransitionArea,
+        maxTransitionAreaHeightFraction = LibraryMaxTransitionArea,
+    ),
+)
+
+private const val LibraryMinTransitionArea = 0.45f
+private const val LibraryMaxTransitionArea = 0.75f
 
 /**
  * Home screen.
@@ -103,7 +124,7 @@ fun LibraryScreen(
     onRescan: () -> Unit,
 ) {
     val scrollState = rememberTransformingLazyColumnState()
-    val transformationSpec = rememberTransformationSpec()
+    val transformationSpec = rememberTransformationSpec(*LibraryTransformationSpecs)
     var showTracks by rememberSaveable { mutableStateOf(true) }
 
     ScreenScaffold(scrollState = scrollState) { padding ->

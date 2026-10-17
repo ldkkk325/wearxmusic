@@ -2,17 +2,24 @@ package com.wearx.music.data
 
 import android.content.ContentUris
 import android.content.Context
+import android.database.ContentObserver
 import android.media.MediaMetadataRetriever
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.provider.MediaStore
+import android.util.Log
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import java.security.MessageDigest
 
 /**
  * Read-only view over the device's local audio.
@@ -34,25 +41,64 @@ class MusicLibraryRepository(private val context: Context) {
      * Per-file results that survive a reload.
      *
      * `MediaMetadataRetriever.setDataSource` is not cheap, and [loadLibrary] runs again on every
-     * permission change and every rescan, so re-opening every file each time is pure waste on a
-     * watch. Both caches are keyed by something that changes when the underlying file does, so an
-     * edited or replaced track is still re-read.
+     * permission change, every rescan and every observed MediaStore change, so re-opening every
+     * file each time is pure waste on a watch. Keyed by something that changes when the underlying
+     * file does, so an edited or replaced track is still re-read. Eviction is LRU rather than the
+     * old clear-everything: a cache that empties itself the moment it fills turns every scan past
+     * the cap into a full re-parse of the whole library.
      */
-    private val parsedFiles = mutableMapOf<String, ParsedTrack>()
+    private val parsedFiles = lruCache<String, ParsedTrack>(PARSED_CACHE_SIZE)
 
     /** `File.canonicalPath` costs a syscall per call; the paths do not change between reloads. */
-    private val canonicalPaths = mutableMapOf<String, String>()
+    private val canonicalPaths = lruCache<String, String>(CANONICAL_CACHE_SIZE)
+
+    /** Serialises loaders: the initial load and a MediaStore-change reload can overlap, and both
+     * caches above are plain (non-thread-safe) maps. */
+    private val loadMutex = Mutex()
 
     /** A parsed file plus the file state it was parsed from, so staleness is detectable. */
     private class ParsedTrack(val stamp: String, val track: Track)
 
-    suspend fun loadLibrary(): List<Album> = withContext(Dispatchers.IO) {
+    private suspend fun loadLibraryLocked(): List<Album> {
         val fromStore = queryMediaStore()
         val knownPaths = fromStore.mapNotNullTo(mutableSetOf()) { it.path?.let(::identity) }
         val extras = collectAudioFiles()
             .filterNot { identity(it.absolutePath) in knownPaths }
             .mapNotNull(::readTrack)
-        groupIntoAlbums(fromStore + extras)
+        return groupIntoAlbums(fromStore + extras)
+    }
+
+    suspend fun loadLibrary(): List<Album> = withContext(Dispatchers.IO) {
+        loadMutex.withLock { loadLibraryLocked() }
+    }
+
+    /**
+     * Fires [onChange] whenever the audio library changes underneath us — a rescan finished,
+     * artwork got indexed, another app added a file. Returns a function that unregisters.
+     *
+     * The callback arrives on the main looper. Bursts are the caller's problem (one rescan fires
+     * this per file), and files that never reach MediaStore — the ones only the filesystem walk
+     * finds — do not signal at all, which is why the manual rescan still exists.
+     */
+    fun observe(onChange: () -> Unit): () -> Unit {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                onChange()
+            }
+        }
+        val resolver = context.contentResolver
+        val audioCollection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        resolver.registerContentObserver(audioCollection, /* notifyForDescendants = */ true, observer)
+        // Album covers live in their own pseudo-collection; a rescan that only updates artwork
+        // signals here and not on the audio rows.
+        resolver.registerContentObserver(
+            Uri.parse("content://media/external/audio/albumart"),
+            true,
+            observer,
+        )
+        return {
+            runCatching { resolver.unregisterContentObserver(observer) }
+        }
     }
 
     /**
@@ -176,26 +222,27 @@ class MusicLibraryRepository(private val context: Context) {
 
             val folder = file.parentFile?.name.orEmpty()
             val albumName = album.ifBlank { folder }
-            val artwork = retriever.embeddedPicture?.let { cacheArtwork(albumName, it) }
+            val artwork = retriever.embeddedPicture?.let { cacheArtwork(it) }
 
             Track(
-                id = identity(file.absolutePath).hashCode().toLong(),
+                id = stableId(file.absolutePath),
                 title = title,
                 artist = artist,
                 album = albumName,
-                albumId = albumName.hashCode().toLong(),
+                albumId = stableId(albumName),
                 durationMs = duration,
                 uri = Uri.fromFile(file),
                 trackNumber = trackNumber,
                 path = file.absolutePath,
                 artUri = artwork,
             )
+        }.onFailure { error ->
+            // A corrupt file used to disappear silently — the track just never showed up, with
+            // nothing in logcat to say why.
+            Log.w(TAG, "Unreadable audio file: ${file.path}", error)
         }.getOrNull().also {
             runCatching { retriever.release() }
-            if (it != null) {
-                if (parsedFiles.size >= PARSED_CACHE_SIZE) parsedFiles.clear()
-                parsedFiles[file.absolutePath] = ParsedTrack(stamp, it)
-            }
+            if (it != null) parsedFiles[file.absolutePath] = ParsedTrack(stamp, it)
         }
     }
 
@@ -203,12 +250,21 @@ class MusicLibraryRepository(private val context: Context) {
         extractMetadata(key)?.takeIf { it.isNotBlank() }
 
     /** Caches an embedded cover in the app cache dir so Coil can load it from a real Uri. */
-    private fun cacheArtwork(albumName: String, bytes: ByteArray): Uri? = runCatching {
+    private fun cacheArtwork(bytes: ByteArray): Uri? = runCatching {
         val dir = File(context.cacheDir, "artwork").apply { mkdirs() }
-        val file = File(dir, "${albumName.hashCode()}.img")
-        if (!file.isFile || file.length() != bytes.size.toLong()) file.writeBytes(bytes)
+        // Named by the CONTENT of the picture, not the album: `albumName.hashCode()` let two
+        // same-named albums overwrite each other and could collide outright, and the old
+        // length-equality check kept stale bytes whenever a cover changed to one of the same
+        // size. A digest makes the file immutable — the same picture is the same file, forever.
+        val file = File(dir, "${bytes.digestPrefix()}.img")
+        if (!file.isFile) file.writeBytes(bytes)
         Uri.fromFile(file)
     }.getOrNull()
+
+    private fun ByteArray.digestPrefix(): String =
+        MessageDigest.getInstance("SHA-1").digest(this)
+            .copyOf(DIGEST_PREFIX_BYTES)
+            .joinToString("") { byte -> "%02x".format(byte) }
 
     // ---------------------------------------------------------------- shared
 
@@ -225,7 +281,9 @@ class MusicLibraryRepository(private val context: Context) {
             )
             val first = ordered.first()
             Album(
-                id = key.hashCode().toLong(),
+                // 64-bit, because this id is a Compose list key: two albums sharing a 32-bit
+                // `hashCode` would crash the library with "duplicate key".
+                id = stableId(key),
                 title = first.album,
                 artist = first.artist,
                 artUri = ordered.firstNotNullOfOrNull { it.artUri },
@@ -238,7 +296,6 @@ class MusicLibraryRepository(private val context: Context) {
     private fun identity(path: String): String {
         canonicalPaths[path]?.let { return it }
         val resolved = runCatching { File(path).canonicalPath }.getOrDefault(path)
-        if (canonicalPaths.size >= CANONICAL_CACHE_SIZE) canonicalPaths.clear()
         canonicalPaths[path] = resolved
         return resolved
     }
@@ -249,7 +306,35 @@ class MusicLibraryRepository(private val context: Context) {
         return SYSTEM_SOUND_MARKERS.any { path.contains(it, ignoreCase = true) }
     }
 
+    /**
+     * A stable 64-bit id for a name or path.
+     *
+     * `String.hashCode()` is 32 bits, and these ids are Compose list keys — two entries colliding
+     * crashes the screen with "duplicate key". FNV-1a over the full 64 bits puts the birthday
+     * bound past five billion entries instead of sixty-five thousand.
+     */
+    private fun stableId(text: String): Long {
+        var hash = FNV_OFFSET_BASIS
+        for (i in text.indices) {
+            hash = (hash xor text[i].code.toULong()) * FNV_PRIME
+        }
+        return hash.toLong()
+    }
+
+    /** Insertion-ordered map with access-order eviction — a plain LRU without pulling in a library. */
+    private fun <K, V> lruCache(maxSize: Int): LinkedHashMap<K, V> =
+        object : LinkedHashMap<K, V>(16, 0.75f, /* accessOrder = */ true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<K, V>): Boolean =
+                size > maxSize
+        }
+
     private companion object {
+        private const val TAG = "MusicLibrary"
+
+        /** FNV-1a 64-bit constants — `ULong` rather than `Long` so the multiply keeps the high bits. */
+        val FNV_OFFSET_BASIS = 0xcbf29ce484222325UL
+        val FNV_PRIME = 0x100000001b3UL
+
         /**
          * How long to wait for the scanner before reloading anyway. The scan itself continues in the
          * background either way, so this only decides when the UI stops saying "rescanning"; the
@@ -259,6 +344,9 @@ class MusicLibraryRepository(private val context: Context) {
 
         const val PARSED_CACHE_SIZE = 512
         const val CANONICAL_CACHE_SIZE = 2_048
+
+        /** Bytes of the artwork digest used as the cache file name — 96 bits, no collisions in practice. */
+        const val DIGEST_PREFIX_BYTES = 12
 
         val MUSIC_ROOTS = listOf(
             "/storage/emulated/0/Music",

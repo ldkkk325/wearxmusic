@@ -1,6 +1,8 @@
 package com.wearx.music.data
 
 import android.content.Context
+import android.os.Environment
+import android.util.Log
 import com.wearx.music.data.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -19,10 +21,25 @@ import java.io.InputStream
  */
 class LyricsRepository(private val context: Context) {
 
-    suspend fun load(track: Track?): Lyrics = withContext(Dispatchers.IO) {
-        if (track == null) return@withContext Lyrics.None
-        val raw = readEmbedded(track) ?: readSidecar(track)
-        raw?.let(::toLyrics) ?: Lyrics.None
+    /**
+     * Parsed results keyed by track id. The ID3/Vorbis scan re-reads the head of the file on every
+     * call, and swiping into and out of the lyrics page used to pay that cost again each time.
+     */
+    private val cache = object : LinkedHashMap<Long, Lyrics>(16, 0.75f, /* accessOrder = */ true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Long, Lyrics>): Boolean =
+            size > CACHE_SIZE
+    }
+
+    suspend fun load(track: Track?): Lyrics {
+        if (track == null) return Lyrics.None
+        synchronized(cache) { cache[track.id]?.let { return it } }
+
+        val loaded = withContext(Dispatchers.IO) {
+            val raw = readEmbedded(track) ?: readSidecar(track)
+            raw?.let(::toLyrics) ?: Lyrics.None
+        }
+        synchronized(cache) { cache[track.id] = loaded }
+        return loaded
     }
 
     // ---------------------------------------------------------------- embedded
@@ -41,6 +58,9 @@ class LyricsRepository(private val context: Context) {
                 parseVorbisLyrics(head + input.readAtMost(VORBIS_SCAN_BYTES))
             }
         }
+    }.onFailure { error ->
+        // Silent nulls made "why is there no lyrics for this file" unanswerable from logcat.
+        Log.w(TAG, "Embedded lyrics unreadable for ${track.uri}", error)
     }.getOrNull()
 
     private fun parseId3Frames(majorVersion: Int, body: ByteArray): String? {
@@ -113,11 +133,18 @@ class LyricsRepository(private val context: Context) {
     // ------------------------------------------------------------------ sidecar
 
     private fun readSidecar(track: Track): String? {
+        // A `.lrc` is not a media file, so READ_MEDIA_AUDIO does not cover it: without All Files
+        // Access every one of these reads fails with EACCES — an exception per track, for a result
+        // that can never be anything but null. Check first; the grant lives behind a settings row.
+        if (!Environment.isExternalStorageManager()) return null
         val path = track.path ?: return null
         val dot = path.lastIndexOf('.')
         val base = if (dot > 0) path.substring(0, dot) else path
         return SIDECAR_EXTENSIONS.firstNotNullOfOrNull { extension ->
             runCatching { File(base + extension).takeIf { it.isFile }?.readText() }
+                .onFailure { error ->
+                    Log.w(TAG, "Sidecar lyrics unreadable next to ${track.path}", error)
+                }
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() }
         }
@@ -184,11 +211,21 @@ class LyricsRepository(private val context: Context) {
     }
 
     private companion object {
+        private const val TAG = "Lyrics"
+
+        /** Parsed-lyrics cache size; a watch session rarely touches more than a couple dozen. */
+        private const val CACHE_SIZE = 128
+
         val ID3 = 'I'.code.toByte()
         const val MAX_TAG_BYTES = 4 * 1024 * 1024
         const val VORBIS_SCAN_BYTES = 256 * 1024
         val SIDECAR_EXTENSIONS = listOf(".lrc", ".LRC")
         val LRC_TIME = Regex("""\[(\d{1,3}):(\d{2})(?:[.:](\d{1,3}))?]""")
-        val VORBIS_LYRICS = Regex("""(?i)(?:UNSYNCED)?LYRICS=([^\u0000]{0,20000})""")
+
+        /**
+         * The separator in front keeps the key from matching inside a longer name — without it
+         * `SOME_LYRICS=` (any tag merely ending in `LYRICS`) would be read as the lyrics field.
+         */
+        val VORBIS_LYRICS = Regex("""(?i)(?:^|[\u0000\r\n])(?:UNSYNCED)?LYRICS=([^\u0000]{0,20000})""")
     }
 }

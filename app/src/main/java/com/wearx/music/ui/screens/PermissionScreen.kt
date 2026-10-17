@@ -68,8 +68,29 @@ fun PermissionScreen(
                     modifier = Modifier
                         .transformedHeight(this, transformationSpec)
                         .fillMaxWidth(),
-                    icon = { Icon(Icons.Filled.LibraryMusic, contentDescription = null) },
-                    label = { Text(stringResource(R.string.permission_grant)) },
+                    // Once the system refuses to ask again, this opens the app's settings page —
+                    // so the label has to say that, or the button looks broken when it works.
+                    icon = {
+                        Icon(
+                            imageVector = if (permanentlyDenied) {
+                                Icons.Filled.Lock
+                            } else {
+                                Icons.Filled.LibraryMusic
+                            },
+                            contentDescription = null,
+                        )
+                    },
+                    label = {
+                        Text(
+                            stringResource(
+                                if (permanentlyDenied) {
+                                    R.string.permission_open_settings
+                                } else {
+                                    R.string.permission_grant
+                                },
+                            ),
+                        )
+                    },
                     transformation = SurfaceTransformation(transformationSpec),
                 )
             }

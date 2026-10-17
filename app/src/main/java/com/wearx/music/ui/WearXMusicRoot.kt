@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -36,7 +37,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +59,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.wear.compose.foundation.hierarchicalFocusGroup
 import androidx.wear.compose.material3.AppScaffold
 import androidx.wear.compose.material3.CircularProgressIndicator
@@ -67,8 +68,8 @@ import androidx.wear.compose.material3.Text
 import com.wearx.music.BuildConfig
 import com.wearx.music.R
 import com.wearx.music.WearXMusicApp
-import com.wearx.music.data.Lyrics
 import com.wearx.music.data.AppSettings
+import com.wearx.music.data.ScreenShape
 import com.wearx.music.data.SortMode
 import com.wearx.music.data.ThemeMode
 import com.wearx.music.data.sortedBy
@@ -76,6 +77,7 @@ import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
 import com.wearx.music.ui.components.rememberArtworkSeedColor
 import com.wearx.music.ui.components.tonalSpotScheme
+import com.wearx.music.ui.onboarding.OnboardingFlow
 import com.wearx.music.ui.screens.AlbumDetailScreen
 import com.wearx.music.ui.screens.LibraryScreen
 import com.wearx.music.ui.screens.MoreScreen
@@ -104,11 +106,31 @@ fun WearXMusicRoot() {
     val permission = rememberAudioPermissionState()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
 
-    var albums by remember { mutableStateOf(emptyList<Album>()) }
-    var isLoading by remember { mutableStateOf(false) }
-    var isRescanning by remember { mutableStateOf(false) }
-    var reloadToken by remember { mutableIntStateOf(0) }
-    val scope = rememberCoroutineScope()
+    // First run: agreement, screen shape, then the welcome animation. Nothing from the main UI
+    // is composed (let alone loaded) until this finishes — and disagreeing has already exited
+    // the app by the time it could have.
+    if (!settings.onboardingCompleted) {
+        OnboardingFlow(
+            reduceMotion = settings.reduceMotion,
+            onFinished = { shape ->
+                app.settings.setScreenShape(shape)
+                app.settings.completeOnboarding()
+            },
+        )
+        return
+    }
+
+    // Library and playback state live in ViewModels: a configuration change keeps both instead
+    // of re-walking the disk and re-binding the player connection, and the load/observe/lyrics
+    // logic is out of the composition tree where it can be reasoned about (and tested).
+    val libraryViewModel: LibraryViewModel = viewModel()
+    val playerViewModel: PlayerViewModel = viewModel {
+        PlayerViewModel(app.player, app.lyrics, libraryViewModel.albums)
+    }
+
+    val albums by libraryViewModel.albums.collectAsStateWithLifecycle()
+    val isLoading by libraryViewModel.isLoading.collectAsStateWithLifecycle()
+    val isRescanning by libraryViewModel.isRescanning.collectAsStateWithLifecycle()
 
     // Bind to the playback service while the UI is on screen; the service keeps playing after.
     DisposableEffect(Unit) {
@@ -116,17 +138,13 @@ fun WearXMusicRoot() {
         onDispose { app.player.release() }
     }
 
-    val playback by app.player.state.collectAsStateWithLifecycle()
+    val playback by playerViewModel.state.collectAsStateWithLifecycle()
+    val playhead by playerViewModel.position.collectAsStateWithLifecycle()
+    val lyrics by playerViewModel.lyrics.collectAsStateWithLifecycle()
+    val lyricsLoading by playerViewModel.lyricsLoading.collectAsStateWithLifecycle()
 
-    LaunchedEffect(permission.granted, reloadToken) {
-        if (!permission.granted) {
-            albums = emptyList()
-            isLoading = false
-            return@LaunchedEffect
-        }
-        isLoading = true
-        albums = app.library.loadLibrary()
-        isLoading = false
+    LaunchedEffect(permission.granted) {
+        libraryViewModel.onPermissionChanged(permission.granted)
     }
 
     // The back stack is saved as plain strings so the position you were at survives process death,
@@ -188,23 +206,7 @@ fun WearXMusicRoot() {
         }
     }
 
-    val currentTrack = remember(albums, playback.mediaId) {
-        val id = playback.mediaId?.toLongOrNull()
-        albums.firstNotNullOfOrNull { album -> album.tracks.firstOrNull { it.id == id } }
-    }
-
-    var lyrics by remember { mutableStateOf<Lyrics>(Lyrics.None) }
-    var lyricsLoading by remember { mutableStateOf(false) }
-    LaunchedEffect(currentTrack?.id) {
-        if (currentTrack == null) {
-            lyrics = Lyrics.None
-            lyricsLoading = false
-        } else {
-            lyricsLoading = true
-            lyrics = app.lyrics.load(currentTrack)
-            lyricsLoading = false
-        }
-    }
+    // Lyrics are owned by PlayerViewModel (keyed off the current track, cached per track).
 
     // A back that is committed more than once in a single gesture — predictive-back and a second
     // tap on the edge button, say — would drop two routes. The commit is accepted only until the
@@ -234,13 +236,19 @@ fun WearXMusicRoot() {
     fun play(track: Track) {
         val index = libraryQueue.indexOfFirst { it.id == track.id }
         if (index < 0) return
-        app.player.playQueue(libraryQueue, index)
+        playerViewModel.playQueue(libraryQueue, index)
         navigate(Route.NowPlaying)
     }
 
     fun playFromAlbum(album: Album) {
         album.tracks.firstOrNull()?.let(::play)
     }
+
+    /**
+     * Re-indexes Music and refreshes the library — owned by [LibraryViewModel], shared by the
+     * empty-state button and the settings row.
+     */
+    fun rescan() = libraryViewModel.rescan()
 
     val previousRoute = if (backStack.size >= 2) backStack[backStack.size - 2] else null
 
@@ -249,6 +257,13 @@ fun WearXMusicRoot() {
     // this, and with it on they land on their final state instead of travelling to it. The morph is
     // already initialised to 1f in that case, so the page simply appears.
     val reduceMotion = settings.reduceMotion
+
+    // Round dial or square — chosen once in onboarding — decides how the transition backdrop and
+    // each page are clipped. One value, read by every clip in the navigation host.
+    val screenShape = when (settings.screenShape) {
+        ScreenShape.ROUND -> CircleShape
+        ScreenShape.SQUARE -> RectangleShape
+    }
 
     // Predictive back, wired into the route transition itself. This is the structure the platform's
     // own Wear NavHost uses (`PredictiveBackNavHost` in androidx.wear.compose:compose-navigation):
@@ -412,21 +427,12 @@ fun WearXMusicRoot() {
                                 onOpenVolume = { navigate(Route.Volume) },
                                 onOpenSettings = { navigate(Route.Settings) },
                                 onOpenSearch = { navigate(Route.Search) },
-                                onPlayNext = { track -> app.player.playNext(track) },
+                                onPlayNext = { track -> playerViewModel.playNext(track) },
                                 sortMode = sortMode,
                                 onCycleSort = { sortMode = sortMode.next() },
-                                onTogglePlay = app.player::playPause,
+                                onTogglePlay = playerViewModel::playPause,
                                 onOpenNowPlaying = { navigate(Route.NowPlaying) },
-                                onRescan = {
-                                    if (!isRescanning) {
-                                        isRescanning = true
-                                        scope.launch {
-                                            app.library.requestRescan()
-                                            reloadToken++
-                                            isRescanning = false
-                                        }
-                                    }
-                                },
+                                onRescan = ::rescan,
                             )
                         }
 
@@ -447,12 +453,13 @@ fun WearXMusicRoot() {
 
                         Route.NowPlaying -> NowPlayingScreen(
                             state = playback,
+                            position = playhead,
                             lyrics = lyrics,
                             lyricsLoading = lyricsLoading,
                             reduceMotion = settings.reduceMotion,
-                            onPlayPause = app.player::playPause,
-                            onNext = app.player::next,
-                            onPrevious = app.player::previous,
+                            onPlayPause = playerViewModel::playPause,
+                            onNext = playerViewModel::next,
+                            onPrevious = playerViewModel::previous,
                             onOpenMore = { navigate(Route.More) },
                             onOpenVolume = { navigate(Route.Volume) },
                             onOpenSettings = { navigate(Route.Settings) },
@@ -460,8 +467,8 @@ fun WearXMusicRoot() {
 
                         Route.More -> MoreScreen(
                             state = playback,
-                            onSeekBy = app.player::seekBy,
-                            onCyclePlaybackMode = app.player::cyclePlaybackMode,
+                            onSeekBy = playerViewModel::seekBy,
+                            onCyclePlaybackMode = playerViewModel::cyclePlaybackMode,
                             onBack = { commitBack() },
                         )
 
@@ -486,6 +493,8 @@ fun WearXMusicRoot() {
                             section = route.section,
                             settings = settings,
                             versionName = BuildConfig.VERSION_NAME,
+                            isRescanning = isRescanning,
+                            onRescan = ::rescan,
                             onReduceMotionChange = app.settings::setReduceMotion,
                             onUiScaleChange = app.settings::setUiScale,
                             onDynamicColorChange = app.settings::setDynamicColor,
@@ -554,7 +563,7 @@ fun WearXMusicRoot() {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(CircleShape)
+                        .clip(screenShape)
                         .background(MaterialTheme.colorScheme.background),
                 )
 
@@ -629,8 +638,8 @@ fun WearXMusicRoot() {
                             // Clip only. The scale that used to live here as a `graphicsLayer` is now
                             // applied by `AnimatedContent` around this content, which keeps the order
                             // this project relies on: the clip is the inner layer and the scale the
-                            // outer one, so what gets scaled is already a circle.
-                            .clip(CircleShape)
+                            // outer one, so what gets scaled is already the screen's own shape.
+                            .clip(screenShape)
                             .background(MaterialTheme.colorScheme.background)
                             // DEPTH OF FIELD, on the page-opening transition only: the page being
                             // covered goes out of focus as the new circle grows over it. The page

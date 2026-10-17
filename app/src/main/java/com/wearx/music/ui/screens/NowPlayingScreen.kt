@@ -55,6 +55,7 @@ import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.data.Lyrics
 import com.wearx.music.playback.PlaybackInterruption
+import com.wearx.music.playback.PlayerPosition
 import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.ArtworkBackdrop
 import com.wearx.music.ui.components.MarqueeText
@@ -84,6 +85,7 @@ private const val PageCount = 2
 @Composable
 fun NowPlayingScreen(
     state: PlayerUiState,
+    position: PlayerPosition,
     lyrics: Lyrics,
     lyricsLoading: Boolean,
     reduceMotion: Boolean,
@@ -125,6 +127,7 @@ fun NowPlayingScreen(
             if (page == PlayerPageIndex) {
                 PlayerPage(
                     state = state,
+                    position = position,
                     reduceMotion = reduceMotion,
                     onPlayPause = onPlayPause,
                     onNext = onNext,
@@ -137,7 +140,7 @@ fun NowPlayingScreen(
                 LyricsPage(
                     lyrics = lyrics,
                     isLoading = lyricsLoading,
-                    positionMs = state.positionMs,
+                    positionMs = position.positionMs,
                     trackTitle = state.title,
                 )
             }
@@ -155,6 +158,7 @@ fun NowPlayingScreen(
 @Composable
 private fun PlayerPage(
     state: PlayerUiState,
+    position: PlayerPosition,
     reduceMotion: Boolean,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
@@ -213,8 +217,8 @@ private fun PlayerPage(
                 Text(
                     text = stringResource(
                         R.string.now_playing_progress,
-                        formatDuration(state.positionMs),
-                        formatDuration(state.durationMs),
+                        formatDuration(position.positionMs),
+                        formatDuration(position.durationMs),
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline,
@@ -245,7 +249,7 @@ private fun PlayerPage(
                 }
             }
 
-            TransportRow(state, reduceMotion, onPrevious, onPlayPause, onNext)
+            TransportRow(state, position, reduceMotion, onPrevious, onPlayPause, onNext)
 
             NavigationRow(
                 onOpenVolume = onOpenVolume,
@@ -266,6 +270,7 @@ private fun PlayerPage(
 @Composable
 private fun TransportRow(
     state: PlayerUiState,
+    position: PlayerPosition,
     reduceMotion: Boolean,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
@@ -302,7 +307,7 @@ private fun TransportRow(
             contentAlignment = Alignment.Center,
         ) {
             WaveProgressRing(
-                progress = state.progressFraction,
+                progress = position.progressFraction,
                 waving = state.isPlaying && !reduceMotion,
                 modifier = Modifier.size(PlayRingSize),
                 strokeWidth = 4.dp,

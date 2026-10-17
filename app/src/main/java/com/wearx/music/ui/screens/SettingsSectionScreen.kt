@@ -1,5 +1,10 @@
 package com.wearx.music.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Environment
+import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -12,14 +17,24 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
@@ -40,6 +55,7 @@ import com.wearx.music.R
 import com.wearx.music.data.AppSettings
 import com.wearx.music.data.ThemeMode
 import com.wearx.music.ui.SettingsSection
+import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.MorphGroupIconButton
 import com.wearx.music.ui.components.ScreenBackButton
 import kotlin.math.roundToInt
@@ -56,6 +72,8 @@ fun SettingsSectionScreen(
     section: SettingsSection,
     settings: AppSettings,
     versionName: String,
+    isRescanning: Boolean,
+    onRescan: () -> Unit,
     onReduceMotionChange: (Boolean) -> Unit,
     onUiScaleChange: (Float) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
@@ -102,7 +120,11 @@ fun SettingsSectionScreen(
                     onMorphBlurChange = onMorphBlurChange,
                 )
 
-                SettingsSection.PLAYBACK -> playbackSection(transformationSpec)
+                SettingsSection.PLAYBACK -> playbackSection(
+                    transformationSpec = transformationSpec,
+                    isRescanning = isRescanning,
+                    onRescan = onRescan,
+                )
                 SettingsSection.ABOUT -> aboutSection(transformationSpec, settings, versionName)
             }
         }
@@ -198,15 +220,93 @@ private fun TransformingLazyColumnScope.motionSection(
     }
 }
 
-/** Empty on purpose: nothing about playback is configurable yet, and this is where it will land. */
-private fun TransformingLazyColumnScope.playbackSection(transformationSpec: TransformationSpec) {
+/**
+ * Library scanning lives here rather than only behind the empty state: once a library has any
+ * song at all, the old empty-state button was the only rescan entry point — and new files could
+ * never be picked up without wiping app data.
+ */
+private fun TransformingLazyColumnScope.playbackSection(
+    transformationSpec: TransformationSpec,
+    isRescanning: Boolean,
+    onRescan: () -> Unit,
+) {
     group(transformationSpec) {
-        Text(
-            text = stringResource(R.string.settings_group_playback_summary),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        MorphButton(
+            onClick = onRescan,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isRescanning,
+            icon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+            label = {
+                Text(stringResource(if (isRescanning) R.string.rescanning else R.string.action_rescan))
+            },
         )
+        lrcPermissionRow()
     }
+}
+
+/**
+ * The All Files Access grant that makes `.lrc` sidecar lyrics readable at all. The system screen
+ * is the only place it can be given, so this row reports the current state and hands off to it.
+ */
+@Composable
+private fun ColumnScope.lrcPermissionRow() {
+    val context = LocalContext.current
+    var granted by remember { mutableStateOf(Environment.isExternalStorageManager()) }
+
+    // The grant is made on another screen; re-reading on resume is what keeps the row honest
+    // after the user comes back.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) granted = Environment.isExternalStorageManager()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    Spacer(Modifier.height(8.dp))
+    Card(
+        onClick = { context.openAllFilesAccessSettings() },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp)) {
+            Text(
+                text = stringResource(R.string.settings_lrc_title),
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = stringResource(if (granted) R.string.settings_lrc_on else R.string.settings_lrc_off),
+                style = MaterialTheme.typography.bodyExtraSmall,
+                color = if (granted) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** Hands off to the system page that can grant (and revoke) All Files Access for this app. */
+private fun Context.openAllFilesAccessSettings() {
+    val specific = Intent(
+        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+        Uri.parse("package:$packageName"),
+    )
+    // Some builds only offer the (much clumsier) list-every-app page; fall back rather than crash.
+    runCatching { startActivity(specific.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .onFailure {
+            runCatching {
+                startActivity(
+                    Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
 }
 
 private fun TransformingLazyColumnScope.aboutSection(transformationSpec: TransformationSpec, settings: AppSettings, versionName: String) {

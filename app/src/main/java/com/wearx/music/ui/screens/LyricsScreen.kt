@@ -32,6 +32,7 @@ import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.data.Lyrics
 import com.wearx.music.ui.components.NoEdgeFadeScaling
+import kotlinx.coroutines.delay
 import kotlin.math.abs
 
 /** How many lines each side of the active one still get a blur ramp. */
@@ -58,6 +59,9 @@ private const val LyricTransitionMs = 440
  * the blur back promptly rather than trailing the finger.
  */
 private const val LyricBlurMs = 300
+
+/** How often to re-check whether the user's own scroll has finished, while waiting to follow. */
+private const val FollowRetryMs = 50L
 
 /**
  * Lyrics page, hosted as the second page of the player's pager so swiping between the two is one
@@ -90,7 +94,11 @@ fun LyricsPage(
     var autoFollowing by remember { mutableStateOf(false) }
 
     LaunchedEffect(activeIndex, headerItems) {
-        if (activeIndex < 0 || scrollState.isScrollInProgress) return@LaunchedEffect
+        if (activeIndex < 0) return@LaunchedEffect
+        // Wait out the user's own scrolling instead of dropping the follow outright. The old
+        // early-return meant a line change that landed mid-drag was lost — not retried — so the
+        // list stayed on the old line until the NEXT one after that came around.
+        while (scrollState.isScrollInProgress) delay(FollowRetryMs)
         autoFollowing = true
         try {
             scrollState.animateScrollToItem(headerItems + activeIndex)

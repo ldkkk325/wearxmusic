@@ -11,6 +11,11 @@ coil = "3.6.3"
 palette = "1.0.0"
 materialComponents = "1.14.0"
 coroutines = "1.11.0"
+benchmark = "1.5.0"
+baselineprofile = "1.5.0"
+profileinstaller = "1.4.1"
+uiautomator = "2.4.0"
+androidxTestJunit = "1.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -48,6 +53,17 @@ material-components = { group = "com.google.android.material", name = "material"
 
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 
+androidx-profileinstaller = { group = "androidx.profileinstaller", name = "profileinstaller", version.ref = "profileinstaller" }
+
+# Baseline-profile generator module only (not shipped in the app). `benchmark-macro-junit4`
+# (not `benchmark-junit4`) is the artifact that carries BaselineProfileRule + MacrobenchmarkScope.
+androidx-benchmark-macro-junit4 = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestJunit" }
+androidx-test-uiautomator = { group = "androidx.test.uiautomator", name = "uiautomator", version.ref = "uiautomator" }
+junit = { group = "junit", name = "junit", version = "4.13.2" }
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+android-test = { id = "com.android.test", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }

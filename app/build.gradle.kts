@@ -4,6 +4,7 @@ plugins {
     // AGP 9 ships built-in Kotlin support, so `org.jetbrains.kotlin.android` must NOT be applied.
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.baselineprofile)
 }
 
 // The release signing key is deliberately NOT in this repository. `keystore.properties` sits in the
@@ -106,6 +107,14 @@ dependencies {
     implementation(libs.material.components)
 
     implementation(libs.kotlinx.coroutines.android)
+
+    // Installs the baseline profile on devices that support it (Play-installed builds get the
+    // profile from the store; sideloaded releases use this to pick up the locally merged one).
+    implementation(libs.androidx.profileinstaller)
+
+    // Merged into the release APK by the baselineprofile plugin. Generation needs a watch —
+    // `./gradlew :baselineprofile:generateReleaseBaselineProfile` with one connected.
+    baselineProfile(project(":baselineprofile"))
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,11 @@ import androidx.wear.compose.material3.CompactButton
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.SolidColor
 
+import kotlinx.coroutines.delay
+
+/** How long a keystroke waits before the library is filtered. */
+private const val SearchDebounceMs = 200L
+
 /**
  * Searches the library by title or artist.
  *
@@ -86,14 +92,27 @@ fun SearchScreen(
     val transformationSpec = rememberTransformationSpec()
 
     val trimmed = query.trim()
-    val matchingTracks = remember(trimmed, tracks) {
-        if (trimmed.isEmpty()) emptyList() else tracks.filter { it.matches(trimmed) }
+    // Filtering is debounced: the album pass walks every track of every album, and doing that on
+    // every keystroke of a watch keyboard made typing itself stutter. Clearing jumps straight
+    // through — an empty box should feel instant.
+    var settled by rememberSaveable { mutableStateOf("") }
+    LaunchedEffect(trimmed) {
+        if (trimmed.isEmpty()) {
+            settled = ""
+            return@LaunchedEffect
+        }
+        delay(SearchDebounceMs)
+        settled = trimmed
     }
-    val matchingAlbums = remember(trimmed, albums) {
-        if (trimmed.isEmpty()) emptyList() else albums.filter { album ->
-            album.title.contains(trimmed, ignoreCase = true) ||
-                album.artist.contains(trimmed, ignoreCase = true) ||
-                album.tracks.any { it.title.contains(trimmed, ignoreCase = true) }
+
+    val matchingTracks = remember(settled, tracks) {
+        if (settled.isEmpty()) emptyList() else tracks.filter { it.matches(settled) }
+    }
+    val matchingAlbums = remember(settled, albums) {
+        if (settled.isEmpty()) emptyList() else albums.filter { album ->
+            album.title.contains(settled, ignoreCase = true) ||
+                album.artist.contains(settled, ignoreCase = true) ||
+                album.tracks.any { it.title.contains(settled, ignoreCase = true) }
         }
     }
 
@@ -176,7 +195,7 @@ fun SearchScreen(
 
             if (trimmed.isEmpty()) {
                 item { Spacer(Modifier.height(8.dp)) }
-            } else if (matchingTracks.isEmpty() && matchingAlbums.isEmpty()) {
+            } else if (trimmed.isNotEmpty() && matchingTracks.isEmpty() && matchingAlbums.isEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.search_empty),
@@ -214,7 +233,7 @@ fun SearchScreen(
 
     // Bringing the keyboard up on entry is the whole point of the screen; a tap to focus first is a
     // step the user should not have to take.
-    androidx.compose.runtime.LaunchedEffect(Unit) {
+    LaunchedEffect(Unit) {
         focusRequester.requestFocus()
         keyboard?.show()
     }

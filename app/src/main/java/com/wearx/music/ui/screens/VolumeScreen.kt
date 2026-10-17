@@ -45,8 +45,10 @@ import kotlin.math.roundToInt
  * Media-volume page. Drives the real `STREAM_MUSIC` volume and follows changes made elsewhere (the
  * rotating crown, system UI, another app) through a content observer.
  *
- * A scrolling [Column] rather than a scaling list: with this little content the scroll range is
- * zero, so the page cannot be dragged into empty space.
+ * A [TransformingLazyColumn] rather than a plain scrolling Column: the scaffold's `edgeButton`
+ * slot is driven by the scaffold's scroll info, so it needs this list's state to appear at all —
+ * and with this little content the scroll range is still near zero, so the page cannot be dragged
+ * into empty space.
  */
 @Composable
 fun VolumeScreen(onBack: () -> Unit) {

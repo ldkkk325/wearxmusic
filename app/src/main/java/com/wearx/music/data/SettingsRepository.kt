@@ -14,6 +14,15 @@ import kotlinx.coroutines.flow.asStateFlow
 enum class ThemeMode { SYSTEM, DARK, LIGHT }
 
 /**
+ * The physical shape of the watch's display.
+ *
+ * The transition backdrop, scrim and page clips are cut to a circle on round dials and left
+ * square on square ones — the same UI either way, just no longer pretending every screen is a
+ * circle. Chosen once during onboarding.
+ */
+enum class ScreenShape { ROUND, SQUARE }
+
+/**
  * How a freshly started queue should play.
  *
  * Shuffle is folded in with the repeat modes instead of being a separate switch: on a watch the
@@ -55,6 +64,10 @@ data class AppSettings(
     val transitionDurationIndex: Int = DEFAULT_TRANSITION_DURATION_INDEX,
     /** Dark, light, or the watch's own setting. */
     val themeMode: ThemeMode = ThemeMode.DARK,
+    /** Whether the first-run flow (agreement, screen shape, welcome) has been completed. */
+    val onboardingCompleted: Boolean = false,
+    /** Round dial or square; picked during onboarding. */
+    val screenShape: ScreenShape = ScreenShape.ROUND,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
@@ -109,6 +122,16 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setScreenShape(value: ScreenShape) {
+        prefs.edit().putString(KEY_SCREEN_SHAPE, value.name).apply()
+        _settings.value = read()
+    }
+
+    fun completeOnboarding() {
+        prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, true).apply()
+        _settings.value = read()
+    }
+
     fun setTransitionDurationIndex(value: Int) {
         prefs.edit()
             .putInt(KEY_TRANSITION_DURATION, value.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices))
@@ -142,6 +165,10 @@ class SettingsRepository(context: Context) {
         themeMode = prefs.getString(KEY_THEME_MODE, null)
             ?.let { name -> ThemeMode.entries.firstOrNull { it.name == name } }
             ?: ThemeMode.DARK,
+        onboardingCompleted = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false),
+        screenShape = prefs.getString(KEY_SCREEN_SHAPE, null)
+            ?.let { name -> ScreenShape.entries.firstOrNull { it.name == name } }
+            ?: ScreenShape.ROUND,
     )
 
     private companion object {
@@ -152,5 +179,7 @@ class SettingsRepository(context: Context) {
         const val KEY_MORPH_BLUR = "morph_blur"
         const val KEY_TRANSITION_DURATION = "transition_duration"
         const val KEY_THEME_MODE = "theme_mode"
+        const val KEY_SCREEN_SHAPE = "screen_shape"
+        const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
     }
 }

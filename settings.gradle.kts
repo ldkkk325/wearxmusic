@@ -27,3 +27,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "WearXMusic"
 include(":app")
+include(":baselineprofile")
