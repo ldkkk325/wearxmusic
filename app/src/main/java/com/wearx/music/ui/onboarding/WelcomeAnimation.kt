@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -45,6 +46,9 @@ import com.wearx.music.ui.components.rememberTapFeedback
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+
+/** How far the welcome title sits above the geometric centre of the dial. */
+private val TitleLift = 28.dp
 
 /**
  * The welcome hero: aurora background, a plain 欢迎 title with a short entrance, and the enter
@@ -87,11 +91,15 @@ fun WelcomeAnimation(
                 color = Color.White,
             ),
             textAlign = TextAlign.Center,
-            modifier = Modifier.graphicsLayer {
-                alpha = titleAlpha
-                scaleX = titleScale
-                scaleY = titleScale
-            },
+            modifier = Modifier
+                // Lifted off dead centre: with the enter button at the bottom of the dial, the
+                // optical centre of the page sits higher than the geometric one.
+                .offset(y = TitleLift)
+                .graphicsLayer {
+                    alpha = titleAlpha
+                    scaleX = titleScale
+                    scaleY = titleScale
+                },
         )
 
         EnterButton(
