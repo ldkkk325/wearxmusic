@@ -7,6 +7,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontVariation
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.ColorScheme
@@ -61,14 +62,18 @@ fun WearXMusicTheme(
  * The app's type scale: Wear's default slots, rewritten onto MiSans and then re-tuned by the
  * two continuous settings — every slot scales its size and shares one weight value.
  *
- * MiSans is a variable font, and Compose pins a variable font's `wght` axis to the [Font]'s
- * declared weight — so `FontWeight(weight)` is what makes the 粗细 slider continuous rather
- * than a switch between bundled statics.
+ * MiSans is a variable font; `FontVariation.weight` pins its `wght` axis explicitly — relying
+ * on the declared [Font] weight alone did NOT move the axis, which is why the 粗细 slider used
+ * to change nothing.
  */
 private fun misansTypography(fontScale: Float, fontWeight: Float): Typography {
     val weight = fontWeight.coerceIn(AppSettings.FONT_WEIGHT_RANGE).toInt()
     val family = FontFamily(
-        Font(resId = R.font.misans_vf, weight = FontWeight(weight)),
+        Font(
+            resId = R.font.misans_vf,
+            weight = FontWeight(weight),
+            variationSettings = FontVariation.Settings(FontVariation.weight(weight)),
+        ),
     )
 
     fun androidx.compose.ui.text.TextStyle.tune(): androidx.compose.ui.text.TextStyle = copy(

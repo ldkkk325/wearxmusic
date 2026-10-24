@@ -44,7 +44,6 @@ import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
-import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.SplitSwitchButton
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.lazy.TransformationSpec
@@ -58,6 +57,7 @@ import com.wearx.music.ui.SettingsSection
 import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.MorphGroupIconButton
 import com.wearx.music.ui.components.ScreenBackButton
+import com.wearx.music.ui.components.SteplessSlider
 import kotlin.math.roundToInt
 
 /**
@@ -403,6 +403,9 @@ private fun ColumnScope.sliderRow(
     lastIndex: Int,
     onValueChange: (Int) -> Unit,
 ) {
+    // Drafted during the drag, committed on release: a theme change (or a blur-duration
+    // change) mid-drag would rebuild the screen the slider lives on, every frame.
+    var draft by remember(valueIndex) { mutableStateOf(valueIndex.toFloat()) }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(text = stringResource(titleRes), style = MaterialTheme.typography.titleSmall)
         Text(
@@ -412,13 +415,12 @@ private fun ColumnScope.sliderRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        // The Int overload with an explicit progression: the Float one computes its step as
-        // `(max - min) / (steps + 1)` and will not call back for a value that falls between stops,
-        // which for a 3- or 4-item setting is most of them.
-        Slider(
-            value = valueIndex.coerceIn(0, lastIndex),
-            onValueChange = onValueChange,
-            valueProgression = 0..lastIndex,
+        SteplessSlider(
+            value = draft,
+            valueRange = 0f..lastIndex.toFloat().coerceAtLeast(1f),
+            steps = lastIndex.coerceAtLeast(1),
+            onValueChange = { draft = it },
+            onValueChangeFinished = { onValueChange(draft.roundToInt().coerceIn(0, lastIndex)) },
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -433,6 +435,7 @@ private fun ColumnScope.continuousSliderRow(
     range: ClosedFloatingPointRange<Float>,
     onValueChange: (Float) -> Unit,
 ) {
+    var draft by remember(currentValue) { mutableStateOf(currentValue) }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Text(text = stringResource(titleRes), style = MaterialTheme.typography.titleSmall)
         Text(
@@ -442,12 +445,12 @@ private fun ColumnScope.continuousSliderRow(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        Slider(
-            value = currentValue.coerceIn(range),
-            onValueChange = onValueChange,
-            // Wear's Slider makes `steps` mandatory; 0 means no detents — genuinely stepless.
-            steps = 0,
+        SteplessSlider(
+            value = draft,
             valueRange = range,
+            steps = 0,
+            onValueChange = { draft = it },
+            onValueChangeFinished = { onValueChange(draft.coerceIn(range)) },
             modifier = Modifier.fillMaxWidth(),
         )
     }

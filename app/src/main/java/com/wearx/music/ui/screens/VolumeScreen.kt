@@ -20,6 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -34,11 +35,11 @@ import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.material3.Icon
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
-import androidx.wear.compose.material3.Slider
 import androidx.wear.compose.material3.Text
 import com.wearx.music.R
 import com.wearx.music.ui.components.MorphButton
 import com.wearx.music.ui.components.ScreenBackButton
+import com.wearx.music.ui.components.SteplessSlider
 import kotlin.math.roundToInt
 
 /**
@@ -145,10 +146,16 @@ fun VolumeScreen(onBack: () -> Unit) {
             }
 
             item {
-                Slider(
-                    value = volume.toFloat(),
-                    onValueChange = { raw -> applyVolume(raw.roundToInt()) },
-                    steps = (maxVolume - 1).coerceAtLeast(0),
+                // Drag-based, like every other control in the app: Wear's own Slider is a
+                // segmented +/− control with no finger drag, which is why the old one "moved
+                // but never followed the finger". Snapped to whole stream steps.
+                var draft by remember(volume) { mutableStateOf(volume.toFloat()) }
+                SteplessSlider(
+                    value = draft,
+                    valueRange = 0f..maxVolume.toFloat(),
+                    steps = maxVolume,
+                    onValueChange = { draft = it },
+                    onValueChangeFinished = { applyVolume(draft.roundToInt()) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
