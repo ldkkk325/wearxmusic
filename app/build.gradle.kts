@@ -96,6 +96,9 @@ dependencies {
     implementation(libs.androidx.wear.compose.foundation)
     implementation(libs.androidx.compose.foundation)
     implementation(libs.androidx.compose.animation)
+    // Phone Material 3's Slider: Wear's own is a segmented +/− control, and the hand-rolled drag
+    // fought the list for the gesture. This one is drag-native, animated, and accessible.
+    implementation(libs.androidx.compose.material3)
 
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.session)
