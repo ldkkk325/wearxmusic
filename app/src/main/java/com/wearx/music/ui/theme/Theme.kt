@@ -5,9 +5,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.ColorScheme
 import androidx.wear.compose.material3.MaterialTheme
+import androidx.wear.compose.material3.Typography
 import androidx.wear.compose.material3.dynamicColorScheme
+import com.wearx.music.R
+import com.wearx.music.data.AppSettings
 import com.wearx.music.ui.components.tonalSpotScheme
 
 /**
@@ -18,13 +25,17 @@ import com.wearx.music.ui.components.tonalSpotScheme
  * control over ALL of the dynamic theming, wallpaper included, not just the artwork tint it also
  * gates. Without a wallpaper colour (or with the switch off) it falls back to
  * [ExpressiveFallbackScheme] — a hand-tuned, high-chroma dark scheme in the spirit of M3
- * Expressive. Everything else (type scale, shapes, motion) comes from the Wear Material 3
- * defaults, which already follow the Expressive design language.
+ * Expressive.
+ *
+ * Type is MiSans (variable), with the `wght` axis and the size multiplier both driven straight
+ * from settings — the "字体粗细/大小" sliders are continuous because the font is.
  */
 @Composable
 fun WearXMusicTheme(
     darkTheme: Boolean = true,
     dynamicColor: Boolean = true,
+    fontScale: Float = AppSettings.DEFAULT_FONT_SCALE,
+    fontWeight: Float = AppSettings.DEFAULT_FONT_WEIGHT,
     content: @Composable () -> Unit,
 ) {
     val context = LocalContext.current
@@ -40,7 +51,54 @@ fun WearXMusicTheme(
             else -> ExpressiveFallbackScheme
         }
     }
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    val typography = remember(fontScale, fontWeight) {
+        misansTypography(fontScale, fontWeight)
+    }
+    MaterialTheme(colorScheme = colorScheme, typography = typography, content = content)
+}
+
+/**
+ * The app's type scale: Wear's default slots, rewritten onto MiSans and then re-tuned by the
+ * two continuous settings — every slot scales its size and shares one weight value.
+ *
+ * MiSans is a variable font, and Compose pins a variable font's `wght` axis to the [Font]'s
+ * declared weight — so `FontWeight(weight)` is what makes the 粗细 slider continuous rather
+ * than a switch between bundled statics.
+ */
+private fun misansTypography(fontScale: Float, fontWeight: Float): Typography {
+    val weight = fontWeight.coerceIn(AppSettings.FONT_WEIGHT_RANGE).toInt()
+    val family = FontFamily(
+        Font(resId = R.font.misans_vf, weight = FontWeight(weight)),
+    )
+
+    fun androidx.compose.ui.text.TextStyle.tune(): androidx.compose.ui.text.TextStyle = copy(
+        fontFamily = family,
+        fontWeight = FontWeight(weight),
+        fontSize = (fontSize.value * fontScale).sp,
+        lineHeight = (lineHeight.value * fontScale).sp,
+    )
+
+    val base = Typography()
+    return base.copy(
+        displayLarge = base.displayLarge.tune(),
+        displayMedium = base.displayMedium.tune(),
+        displaySmall = base.displaySmall.tune(),
+        titleLarge = base.titleLarge.tune(),
+        titleMedium = base.titleMedium.tune(),
+        titleSmall = base.titleSmall.tune(),
+        labelLarge = base.labelLarge.tune(),
+        labelMedium = base.labelMedium.tune(),
+        labelSmall = base.labelSmall.tune(),
+        bodyLarge = base.bodyLarge.tune(),
+        bodyMedium = base.bodyMedium.tune(),
+        bodySmall = base.bodySmall.tune(),
+        bodyExtraSmall = base.bodyExtraSmall.tune(),
+        numeralExtraLarge = base.numeralExtraLarge.tune(),
+        numeralLarge = base.numeralLarge.tune(),
+        numeralMedium = base.numeralMedium.tune(),
+        numeralSmall = base.numeralSmall.tune(),
+        numeralExtraSmall = base.numeralExtraSmall.tune(),
+    )
 }
 
 /**

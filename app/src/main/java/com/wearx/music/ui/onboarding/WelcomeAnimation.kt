@@ -31,10 +31,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.Icon
@@ -51,11 +49,13 @@ import kotlin.math.sin
 private val TitleLift = 28.dp
 
 /**
- * The welcome hero: aurora background, a plain 欢迎 title with a short entrance, and the enter
- * button. No stroke-by-stroke writing — a direct title is what was asked for.
+ * The welcome hero: aurora background, a plain 欢迎 title in the app's own type scale, and the
+ * enter button. The text is deliberately ordinary — the theme's display style as-is, no custom
+ * size, weight or colour — and the aurora follows the theme's light/dark mode.
  */
 @Composable
 fun WelcomeAnimation(
+    darkTheme: Boolean,
     reduceMotion: Boolean,
     onEnter: () -> Unit,
     modifier: Modifier = Modifier,
@@ -64,7 +64,7 @@ fun WelcomeAnimation(
     LaunchedEffect(Unit) { shown = true }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        AuroraBackground(Modifier.fillMaxSize())
+        AuroraBackground(Modifier.fillMaxSize(), darkTheme = darkTheme)
 
         val titleAlpha by animateFloatAsState(
             targetValue = if (shown || reduceMotion) 1f else 0f,
@@ -85,11 +85,7 @@ fun WelcomeAnimation(
 
         Text(
             text = stringResource(R.string.onboarding_welcome_title),
-            style = MaterialTheme.typography.displaySmall.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 72.sp,
-                color = Color.White,
-            ),
+            style = MaterialTheme.typography.displaySmall,
             textAlign = TextAlign.Center,
             modifier = Modifier
                 // Lifted off dead centre: with the enter button at the bottom of the dial, the
@@ -115,12 +111,13 @@ fun WelcomeAnimation(
 // ----------------------------------------------------------------- background
 
 /**
- * The aurora: deep base with large, slowly drifting colour fields, blurred into one soft
- * gradient — its own blurred canvas, so the blur never reaches the title. The three colours
- * are the app's own seed family (violet / rose / teal), not stock Material primaries.
+ * The aurora: a deep (or pale) base with large, slowly drifting colour fields, blurred into one
+ * soft gradient — its own blurred canvas, so the blur never reaches the title. The three colours
+ * are the app's own seed family (violet / rose / teal), and the base follows the theme's mode so
+ * the page is not a dark hole under a forced light theme.
  */
 @Composable
-private fun AuroraBackground(modifier: Modifier) {
+private fun AuroraBackground(modifier: Modifier, darkTheme: Boolean) {
     val transition = rememberInfiniteTransition(label = "aurora")
     val t1 by transition.animateFloat(
         initialValue = 0f,
@@ -135,8 +132,14 @@ private fun AuroraBackground(modifier: Modifier) {
         label = "aurora2",
     )
 
+    val baseTop = if (darkTheme) Color(0xFF1B1824) else Color(0xFFF4EFFA)
+    val baseBottom = if (darkTheme) Color(0xFF0B0914) else Color(0xFFE4D8F5)
+    val violetAlpha = if (darkTheme) 0.50f else 0.32f
+    val roseAlpha = if (darkTheme) 0.40f else 0.26f
+    val tealAlpha = if (darkTheme) 0.32f else 0.22f
+
     Canvas(modifier.blur(48.dp)) {
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF1B1824), Color(0xFF0B0914))))
+        drawRect(Brush.verticalGradient(listOf(baseTop, baseBottom)))
         val radius = size.minDimension * 0.58f
 
         fun blob(color: Color, cx: Float, cy: Float, alpha: Float, r: Float) {
@@ -155,21 +158,21 @@ private fun AuroraBackground(modifier: Modifier) {
             Color(0xFF8B5CF6),
             size.width * (0.32f + 0.12f * sin(t1)),
             size.height * (0.34f + 0.10f * cos(t1)),
-            alpha = 0.50f,
+            alpha = violetAlpha,
             r = radius,
         )
         blob(
             Color(0xFFE8467C),
             size.width * (0.70f + 0.10f * cos(t2)),
             size.height * (0.62f + 0.12f * sin(t2)),
-            alpha = 0.40f,
+            alpha = roseAlpha,
             r = radius,
         )
         blob(
             Color(0xFF0E8C74),
             size.width * (0.55f + 0.14f * sin(t2 + 1.5f)),
             size.height * (0.85f + 0.06f * cos(t1 + 0.7f)),
-            alpha = 0.32f,
+            alpha = tealAlpha,
             r = radius * 0.9f,
         )
     }

@@ -68,9 +68,25 @@ data class AppSettings(
     val onboardingCompleted: Boolean = false,
     /** Round dial or square; picked during onboarding. */
     val screenShape: ScreenShape = ScreenShape.ROUND,
+    /**
+     * Continuous font size multiplier applied to every typography slot — separate from
+     * [uiScale], which rescales the whole density tree including icons and padding.
+     */
+    val fontScale: Float = DEFAULT_FONT_SCALE,
+    /**
+     * Continuous MiSans `wght` axis value (150–700). The font is variable, so this is a real
+     * weight, not a choice among bundled statics.
+     */
+    val fontWeight: Float = DEFAULT_FONT_WEIGHT,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
+
+        val FONT_SCALE_RANGE = 0.85f..1.25f
+        val FONT_WEIGHT_RANGE = 150f..700f
+
+        const val DEFAULT_FONT_SCALE = 1f
+        const val DEFAULT_FONT_WEIGHT = 400f
 
         /** Off, then increasingly blurred. Index 0 means "no blur". */
         val MORPH_BLUR_CHOICES = listOf(0f, 3f, 6f, 10f)
@@ -132,6 +148,20 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setFontScale(value: Float) {
+        prefs.edit()
+            .putFloat(KEY_FONT_SCALE, value.coerceIn(AppSettings.FONT_SCALE_RANGE))
+            .apply()
+        _settings.value = read()
+    }
+
+    fun setFontWeight(value: Float) {
+        prefs.edit()
+            .putFloat(KEY_FONT_WEIGHT, value.coerceIn(AppSettings.FONT_WEIGHT_RANGE))
+            .apply()
+        _settings.value = read()
+    }
+
     fun setTransitionDurationIndex(value: Int) {
         prefs.edit()
             .putInt(KEY_TRANSITION_DURATION, value.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices))
@@ -169,6 +199,10 @@ class SettingsRepository(context: Context) {
         screenShape = prefs.getString(KEY_SCREEN_SHAPE, null)
             ?.let { name -> ScreenShape.entries.firstOrNull { it.name == name } }
             ?: ScreenShape.ROUND,
+        fontScale = prefs.getFloat(KEY_FONT_SCALE, AppSettings.DEFAULT_FONT_SCALE)
+            .coerceIn(AppSettings.FONT_SCALE_RANGE),
+        fontWeight = prefs.getFloat(KEY_FONT_WEIGHT, AppSettings.DEFAULT_FONT_WEIGHT)
+            .coerceIn(AppSettings.FONT_WEIGHT_RANGE),
     )
 
     private companion object {
@@ -181,5 +215,7 @@ class SettingsRepository(context: Context) {
         const val KEY_THEME_MODE = "theme_mode"
         const val KEY_SCREEN_SHAPE = "screen_shape"
         const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        const val KEY_FONT_SCALE = "font_scale"
+        const val KEY_FONT_WEIGHT = "font_weight"
     }
 }

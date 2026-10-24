@@ -80,6 +80,8 @@ fun SettingsSectionScreen(
     onMorphBlurChange: (Int) -> Unit,
     onTransitionDurationChange: (Int) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onFontScaleChange: (Float) -> Unit,
+    onFontWeightChange: (Float) -> Unit,
     onBack: () -> Unit,
 ) {
     val scrollState = rememberTransformingLazyColumnState()
@@ -110,6 +112,8 @@ fun SettingsSectionScreen(
                     onUiScaleChange = onUiScaleChange,
                     onDynamicColorChange = onDynamicColorChange,
                     onThemeModeChange = onThemeModeChange,
+                    onFontScaleChange = onFontScaleChange,
+                    onFontWeightChange = onFontWeightChange,
                 )
 
                 SettingsSection.MOTION -> motionSection(
@@ -144,6 +148,8 @@ private fun TransformingLazyColumnScope.appearanceSection(
     onUiScaleChange: (Float) -> Unit,
     onDynamicColorChange: (Boolean) -> Unit,
     onThemeModeChange: (ThemeMode) -> Unit,
+    onFontScaleChange: (Float) -> Unit,
+    onFontWeightChange: (Float) -> Unit,
 ) {
     val scales = AppSettings.UI_SCALE_CHOICES
     val scaleIndex = scales.indexOfFirst { it == settings.uiScale }.takeIf { it >= 0 } ?: 1
@@ -170,6 +176,28 @@ private fun TransformingLazyColumnScope.appearanceSection(
             scales = scales,
             scaleIndex = scaleIndex,
             onUiScaleChange = onUiScaleChange,
+        )
+        // MiSans is a variable font, so size and weight are real continuous values — not a
+        // picker pretending to be one.
+        continuousSliderRow(
+            titleRes = R.string.settings_font_size,
+            value = stringResource(
+                R.string.settings_font_size_value,
+                (settings.fontScale * 100).roundToInt(),
+            ),
+            currentValue = settings.fontScale,
+            range = AppSettings.FONT_SCALE_RANGE,
+            onValueChange = onFontScaleChange,
+        )
+        continuousSliderRow(
+            titleRes = R.string.settings_font_weight,
+            value = stringResource(
+                R.string.settings_font_weight_value,
+                settings.fontWeight.roundToInt(),
+            ),
+            currentValue = settings.fontWeight,
+            range = AppSettings.FONT_WEIGHT_RANGE,
+            onValueChange = onFontWeightChange,
         )
     }
 }
@@ -391,6 +419,35 @@ private fun ColumnScope.sliderRow(
             value = valueIndex.coerceIn(0, lastIndex),
             onValueChange = onValueChange,
             valueProgression = 0..lastIndex,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+/** A title, its current value, and a stepless slider over a continuous range. */
+@Composable
+private fun ColumnScope.continuousSliderRow(
+    titleRes: Int,
+    value: String,
+    currentValue: Float,
+    range: ClosedFloatingPointRange<Float>,
+    onValueChange: (Float) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Text(text = stringResource(titleRes), style = MaterialTheme.typography.titleSmall)
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyExtraSmall,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Slider(
+            value = currentValue.coerceIn(range),
+            onValueChange = onValueChange,
+            // Wear's Slider makes `steps` mandatory; 0 means no detents — genuinely stepless.
+            steps = 0,
+            valueRange = range,
             modifier = Modifier.fillMaxWidth(),
         )
     }

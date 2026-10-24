@@ -80,6 +80,10 @@
     <string name="repeat_off_state">不循环</string>
     <string name="settings_dynamic_color">动态取色</string>
     <string name="settings_dynamic_color_hint">控件颜色跟随手表壁纸与当前封面</string>
+    <string name="settings_font_size">字体大小</string>
+    <string name="settings_font_size_value">当前：%1$d%%</string>
+    <string name="settings_font_weight">字体粗细</string>
+    <string name="settings_font_weight_value">当前：%1$d</string>
     <string name="settings_ui_scale">界面缩放</string>
     <string name="tab_sort">排序</string>
     <string name="sort_title">按曲名</string>

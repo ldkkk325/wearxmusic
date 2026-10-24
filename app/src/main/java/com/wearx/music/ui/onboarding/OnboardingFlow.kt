@@ -14,6 +14,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,6 +87,7 @@ private const val OnboardingDurationMs = 420
  */
 @Composable
 fun OnboardingFlow(
+    darkTheme: Boolean,
     reduceMotion: Boolean,
     onFinished: (ScreenShape) -> Unit,
 ) {
@@ -103,11 +105,17 @@ fun OnboardingFlow(
     }
 
     Box(
-        modifier = Modifier.graphicsLayer {
-            alpha = exitAlpha.value
-            scaleX = 0.94f + 0.06f * exitAlpha.value
-            scaleY = 0.94f + 0.06f * exitAlpha.value
-        },
+        modifier = Modifier
+            .fillMaxSize()
+            // Explicitly painted: the window background is themed separately for the starting
+            // window, and without this the flow showed through to it — black under a forced
+            // light theme, which is what made dark/light look broken.
+            .background(MaterialTheme.colorScheme.background)
+            .graphicsLayer {
+                alpha = exitAlpha.value
+                scaleX = 0.94f + 0.06f * exitAlpha.value
+                scaleY = 0.94f + 0.06f * exitAlpha.value
+            },
     ) {
         AnimatedContent(
             targetState = step,
@@ -145,6 +153,7 @@ fun OnboardingFlow(
                 )
 
                 OnboardingStep.WELCOME -> WelcomeAnimation(
+                    darkTheme = darkTheme,
                     reduceMotion = reduceMotion,
                     onEnter = {
                         if (reduceMotion) {

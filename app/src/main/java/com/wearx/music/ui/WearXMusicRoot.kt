@@ -106,11 +106,17 @@ fun WearXMusicRoot() {
     val permission = rememberAudioPermissionState()
     val settings by app.settings.settings.collectAsStateWithLifecycle()
 
-    // First run: agreement, screen shape, then the welcome animation. Nothing from the main UI
+    // First run: agreement, screen shape, then the welcome screen. Nothing from the main UI
     // is composed (let alone loaded) until this finishes — and disagreeing has already exited
-    // the app by the time it could have.
+    // the app by the time it could have. The flow reads the theme mode itself so its dark and
+    // light presentations match what the app will use afterwards.
     if (!settings.onboardingCompleted) {
         OnboardingFlow(
+            darkTheme = when (settings.themeMode) {
+                ThemeMode.SYSTEM -> androidx.compose.foundation.isSystemInDarkTheme()
+                ThemeMode.DARK -> true
+                ThemeMode.LIGHT -> false
+            },
             reduceMotion = settings.reduceMotion,
             onFinished = { shape ->
                 app.settings.setScreenShape(shape)
@@ -501,6 +507,8 @@ fun WearXMusicRoot() {
                             onMorphBlurChange = app.settings::setMorphBlurIndex,
                             onTransitionDurationChange = app.settings::setTransitionDurationIndex,
                             onThemeModeChange = app.settings::setThemeMode,
+                            onFontScaleChange = app.settings::setFontScale,
+                            onFontWeightChange = app.settings::setFontWeight,
                             onBack = { commitBack() },
                         )
                 }

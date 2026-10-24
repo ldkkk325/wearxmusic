@@ -27,6 +27,8 @@ class MainActivity : ComponentActivity() {
                 },
                 // One switch for every source of dynamic colour: wallpaper AND current artwork.
                 dynamicColor = settings.dynamicColor,
+                fontScale = settings.fontScale,
+                fontWeight = settings.fontWeight,
             ) {
                 WearXMusicRoot()
             }
