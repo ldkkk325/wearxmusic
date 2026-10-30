@@ -68,6 +68,8 @@ class PlayerViewModel(
 
     fun seekBy(deltaMs: Long) = player.seekBy(deltaMs)
 
+    fun seekTo(positionMs: Long) = player.seekTo(positionMs)
+
     fun cyclePlaybackMode() = player.cyclePlaybackMode()
 
     fun playQueue(queue: List<Track>, startIndex: Int) = player.playQueue(queue, startIndex)

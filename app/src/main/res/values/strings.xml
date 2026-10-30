@@ -102,7 +102,7 @@
     <string name="settings_group_playback_summary">音乐库扫描、淡入淡出与歌词文件访问</string>
     <string name="settings_fade">播放淡入淡出</string>
     <string name="settings_fade_duration">淡入淡出时长</string>
-    <string name="tools_title">工具</string>
+    <string name="tools_title">更多</string>
     <string name="settings_lrc_title">旁挂 .lrc 歌词</string>
     <string name="settings_lrc_on">已开启所有文件访问，可读取歌曲旁的歌词文件</string>
     <string name="settings_lrc_off">未开启，需授予所有文件访问后生效（点此前往）</string>

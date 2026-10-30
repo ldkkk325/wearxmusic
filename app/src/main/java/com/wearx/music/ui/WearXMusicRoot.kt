@@ -473,7 +473,8 @@ fun WearXMusicRoot() {
 
                         Route.More -> MoreScreen(
                             state = playback,
-                            onSeekBy = playerViewModel::seekBy,
+                            position = playhead,
+                            onSeekTo = playerViewModel::seekTo,
                             onCyclePlaybackMode = playerViewModel::cyclePlaybackMode,
                             onBack = { commitBack() },
                         )

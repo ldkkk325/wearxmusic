@@ -3,7 +3,9 @@ package com.wearx.music.ui.screens
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -31,6 +33,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -301,6 +304,13 @@ private fun TransportRow(
         // rather than the corner morph the other buttons use.
         val burstShape = rememberBurstShape(state.isPlaying)
         val pressScale = rememberPressScale(playSource)
+        // The button turns with the ring: the play head's angle, chased smoothly so the 4 Hz
+        // position polls read as continuous rotation rather than steps.
+        val rotation by animateFloatAsState(
+            targetValue = position.progressFraction * 360f,
+            animationSpec = tween(durationMillis = 280, easing = LinearEasing),
+            label = "playButtonRotation",
+        )
 
         Box(
             modifier = Modifier.size(PlayRingSize),
@@ -324,6 +334,7 @@ private fun TransportRow(
                     .graphicsLayer {
                         scaleX = pressScale
                         scaleY = pressScale
+                        rotationZ = rotation
                     },
                 shape = burstShape,
                 colors = ButtonDefaults.buttonColors(),
