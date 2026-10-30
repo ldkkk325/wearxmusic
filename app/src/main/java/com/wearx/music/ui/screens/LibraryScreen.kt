@@ -9,6 +9,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
@@ -33,7 +33,6 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,6 +42,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,7 +52,6 @@ import androidx.wear.compose.foundation.lazy.itemsIndexed
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
 import androidx.wear.compose.foundation.pager.HorizontalPager
 import androidx.wear.compose.foundation.pager.rememberPagerState
-import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.ButtonGroupDefaults
 import androidx.wear.compose.material3.Card
@@ -63,17 +62,11 @@ import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
-import androidx.wear.compose.material3.RevealValue
-import androidx.wear.compose.material3.SwipeToReveal
-import androidx.wear.compose.material3.SwipeToRevealDefaults
-import androidx.wear.compose.material3.rememberRevealState
 import androidx.wear.compose.material3.Text
-import androidx.wear.compose.material3.lazy.ResponsiveTransformationSpec
 import androidx.wear.compose.material3.lazy.TransformationSpec
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import com.wearx.music.R
-import kotlinx.coroutines.launch
 import com.wearx.music.data.SortMode
 import com.wearx.music.data.model.Album
 import com.wearx.music.data.model.Track
@@ -123,9 +116,10 @@ fun LibraryScreen(
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
-            // Keep the tools page composed so the first swipe is not a rebuild.
+            // Keep the tools page composed so the first swipe is not a rebuild. No rotary page
+            // turning on purpose: the crown belongs to whatever list is on screen — the library
+            // here, the lyrics on the player page — not to flipping between these two pages.
             beyondViewportPageCount = 1,
-            rotaryScrollableBehavior = RotaryScrollableDefaults.snapBehavior(pagerState),
         ) { page ->
             if (page == ToolsPageIndex) {
                 ToolsPage(
@@ -543,12 +537,11 @@ private fun AlbumRow(
 }
 
 /**
- * A library row that reveals a secondary action when swiped right-to-left.
+ * A library row: tap plays, long-press queues it as the next track.
  *
- * `SwipeToReveal` is Wear Material 3's own component (new in 1.7) and it is not used anywhere else
- * in the app, so this is its first use. It is right-to-left on purpose: the library already sits
- * inside a right-to-left predictive-back transition and the platform reserves the left edge for
- * swipe-to-dismiss, so the only free direction is this one.
+ * There is no SwipeToReveal here any more: its horizontal drag consumed every swipe that
+ * started on a row, so the home pager could not turn pages from the list at all. Long-press
+ * needs no horizontal gesture, which is exactly what frees the swipe for the pager.
  */
 @Composable
 private fun TrackRow(
@@ -561,47 +554,16 @@ private fun TrackRow(
     transformation: SurfaceTransformation,
     modifier: Modifier = Modifier,
 ) {
-    val revealState = rememberRevealState()
-    val revealScope = rememberCoroutineScope()
-    // The component's own contract: with a partially-revealed state allowed, the APP has to put the
-    // state back to Covered. Without this the row stays parked half-swiped with its content pushed
-    // aside, which is what made a track look like it had vanished and left a hole in the list.
-    // `animateTo` suspends, so the action's click has to launch it rather than call it directly.
-    fun closeReveal() {
-        revealScope.launch { revealState.animateTo(RevealValue.Covered) }
-    }
-
-    SwipeToReveal(
-        primaryAction = {
-            PrimaryActionButton(
-                onClick = {
-                    closeReveal()
-                    onPlayNext()
-                },
-                icon = { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null) },
-                text = { Text(stringResource(R.string.action_play_next), maxLines = 1) },
-                modifier = Modifier.height(SwipeToRevealDefaults.LargeActionButtonHeight),
-            )
-        },
-        // Both entry points close the row: a full swipe is a different code path inside the
-        // component and leaves it revealed too, so resetting only the button would fix half of it.
-        onSwipePrimaryAction = {
-            closeReveal()
-            onPlayNext()
-        },
-        revealState = revealState,
-        // Full swipe fires the same action as tapping the revealed button, as the component expects.
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        TrackRowContent(
-            track = track,
-            artUri = artUri,
-            isCurrent = isCurrent,
-            isPlaying = isPlaying,
-            onClick = onClick,
-            transformation = transformation,
-        )
-    }
+    TrackRowContent(
+        track = track,
+        artUri = artUri,
+        isCurrent = isCurrent,
+        isPlaying = isPlaying,
+        onClick = onClick,
+        onPlayNext = onPlayNext,
+        transformation = transformation,
+        modifier = modifier,
+    )
 }
 
 @Composable
@@ -611,16 +573,26 @@ private fun TrackRowContent(
     isCurrent: Boolean,
     isPlaying: Boolean,
     onClick: () -> Unit,
+    onPlayNext: () -> Unit,
     transformation: SurfaceTransformation,
     modifier: Modifier = Modifier,
 ) {
     val tapFeedback = rememberTapFeedback()
     Card(
-        onClick = {
-            tapFeedback()
-            onClick()
-        },
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .pointerInput(track.id) {
+                detectTapGestures(
+                    onTap = {
+                        tapFeedback()
+                        onClick()
+                    },
+                    onLongPress = {
+                        tapFeedback()
+                        onPlayNext()
+                    },
+                )
+            },
         transformation = transformation,
     ) {
         Row(

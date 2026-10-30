@@ -32,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,7 +40,6 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.foundation.pager.HorizontalPager
 import androidx.wear.compose.foundation.pager.rememberPagerState
-import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.HorizontalPageIndicator
@@ -49,6 +49,7 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
 import com.google.android.horologist.annotations.ExperimentalHorologistApi
+import com.google.android.horologist.media.ui.material3.components.ButtonGroupLayoutDefaults
 import com.google.android.horologist.media.ui.material3.components.animated.AnimatedPlayPauseProgressButton
 import com.google.android.horologist.media.ui.state.model.TrackPositionUiModel
 import com.wearx.music.R
@@ -67,8 +68,10 @@ import kotlin.time.Duration.Companion.milliseconds
 
 private const val FlipHalfTurn = 90f
 
-private val PlayRingSize = 72.dp
-private val SideButtonSize = 52.dp
+/** The row's own horizontal budget; the side buttons take what remains of the dial's width. */
+private val TransportHorizontalPadding = 20.dp
+private val TransportSpacing = 12.dp
+private val SideButtonMinSize = 44.dp
 private val SideIconSize = 24.dp
 private val PlayButtonSize = 64.dp
 
@@ -120,11 +123,10 @@ fun NowPlayingScreen(
             // same scaffold-and-scrollable layout and does not misbehave), so keeping the page alive
             // removes the round trip entirely. It also means the lyrics are already composed and
             // measured when you swipe to them.
+            //
+            // No rotary page turning on purpose: the crown belongs to whatever list is on screen —
+            // the lyrics here, the library on the home page — not to flipping between pages.
             beyondViewportPageCount = 1,
-            // Wear's pager wires up the focus request itself once given a behavior, and the
-            // pager-aware overload supplies the per-page snap provider — so the bezel turns pages
-            // one at a time, with the detent haptics.
-            rotaryScrollableBehavior = RotaryScrollableDefaults.snapBehavior(pagerState),
         ) { page ->
             if (page == PlayerPageIndex) {
                 PlayerPage(
@@ -307,13 +309,25 @@ private fun TransportRow(
         onPrimary = scheme.onPrimaryContainer,
     )
 
+    // Horologist sizes the middle button by screen class (80 dp past a 224 dp height) and builds
+    // its wavy progress path at that size — so the box has to match or the wave gets cropped on a
+    // 450×450 dial, which reads as exactly the "squeezed" glitch. The sides take whatever width
+    // is left, so the row always fits the dial instead of overflowing it.
+    val middleSize = ButtonGroupLayoutDefaults.middleButtonSize
+    val sideSize = (
+        LocalConfiguration.current.screenWidthDp.dp -
+            TransportHorizontalPadding -
+            TransportSpacing * 2 -
+            middleSize
+        ) / 2
+
     // The buttons' own morph animation is the feedback; the stock ripple fought it.
     CompositionLocalProvider(LocalRippleConfiguration provides null) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.spacedBy(TransportSpacing, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             SeekButton(
@@ -321,7 +335,7 @@ private fun TransportRow(
                 contentDescription = stringResource(R.string.action_previous),
                 enabled = state.hasPrevious,
                 onClick = onPrevious,
-                modifier = Modifier.size(SideButtonSize),
+                modifier = Modifier.size(sideSize.coerceAtLeast(SideButtonMinSize)),
             )
 
             MaterialTheme(colorScheme = playScheme) {
@@ -336,7 +350,7 @@ private fun TransportRow(
                     },
                     playing = state.isPlaying,
                     trackPositionUiModel = trackPosition,
-                    modifier = Modifier.size(PlayRingSize),
+                    modifier = Modifier.size(middleSize),
                     interactionSource = playSource,
                     isAnyButtonPressed = playOwnPressed,
                 )
@@ -347,7 +361,7 @@ private fun TransportRow(
                 contentDescription = stringResource(R.string.action_next),
                 enabled = state.hasNext,
                 onClick = onNext,
-                modifier = Modifier.size(SideButtonSize),
+                modifier = Modifier.size(sideSize.coerceAtLeast(SideButtonMinSize)),
             )
         }
     }
