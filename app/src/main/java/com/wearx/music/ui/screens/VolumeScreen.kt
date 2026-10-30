@@ -153,7 +153,10 @@ fun VolumeScreen(onBack: () -> Unit) {
                 SteplessSlider(
                     value = draft,
                     valueRange = 0f..maxVolume.toFloat(),
-                    steps = maxVolume,
+                    // M3 counts the points BETWEEN the ends: 0..maxVolume has maxVolume-1 of
+                    // them. Passing maxVolume added a phantom stop (visible as an even tick
+                    // count whenever the number of levels was odd).
+                    steps = (maxVolume - 1).coerceAtLeast(0),
                     onValueChange = { draft = it },
                     onValueChangeFinished = { applyVolume(draft.roundToInt()) },
                     modifier = Modifier.fillMaxWidth(),

@@ -15,8 +15,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.runtime.Composable
@@ -37,7 +40,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumnScope
+import androidx.wear.compose.foundation.lazy.itemsIndexed
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.material3.AlertDialog
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.Icon
@@ -154,7 +159,7 @@ private fun TransformingLazyColumnScope.appearanceSection(
     val scales = AppSettings.UI_SCALE_CHOICES
     val scaleIndex = scales.indexOfFirst { it == settings.uiScale }.takeIf { it >= 0 } ?: 1
     group(transformationSpec) {
-        sliderRow(
+        pickerRow(
             titleRes = R.string.settings_theme_mode,
             value = stringResource(
                 when (settings.themeMode) {
@@ -163,9 +168,13 @@ private fun TransformingLazyColumnScope.appearanceSection(
                     ThemeMode.LIGHT -> R.string.theme_light
                 },
             ),
-            valueIndex = settings.themeMode.ordinal,
-            lastIndex = ThemeMode.entries.lastIndex,
-            onValueChange = { onThemeModeChange(ThemeMode.entries[it]) },
+            options = listOf(
+                stringResource(R.string.theme_system),
+                stringResource(R.string.theme_dark),
+                stringResource(R.string.theme_light),
+            ),
+            selectedIndex = settings.themeMode.ordinal,
+            onSelect = { onThemeModeChange(ThemeMode.entries[it]) },
         )
         switchRow(
             titleRes = R.string.settings_dynamic_color,
@@ -215,35 +224,28 @@ private fun TransformingLazyColumnScope.motionSection(
             checked = settings.reduceMotion,
             onCheckedChange = onReduceMotionChange,
         )
-        sliderRow(
+        pickerRow(
             titleRes = R.string.settings_transition_duration,
-            value = stringResource(
-                R.string.settings_transition_duration_value,
-                AppSettings.TRANSITION_DURATION_LABELS[
-                    settings.transitionDurationIndex.coerceIn(
-                        AppSettings.TRANSITION_DURATION_LABELS.indices,
-                    )
-                ],
-                AppSettings.TRANSITION_DURATION_CHOICES[
-                    settings.transitionDurationIndex.coerceIn(
-                        AppSettings.TRANSITION_DURATION_CHOICES.indices,
-                    )
-                ],
-            ),
-            valueIndex = settings.transitionDurationIndex,
-            lastIndex = AppSettings.TRANSITION_DURATION_CHOICES.lastIndex,
-            onValueChange = onTransitionDurationChange,
+            value = AppSettings.TRANSITION_DURATION_LABELS[
+                settings.transitionDurationIndex.coerceIn(AppSettings.TRANSITION_DURATION_LABELS.indices)
+            ],
+            options = AppSettings.TRANSITION_DURATION_LABELS,
+            selectedIndex = settings.transitionDurationIndex
+                .coerceIn(AppSettings.TRANSITION_DURATION_LABELS.indices),
+            onSelect = onTransitionDurationChange,
         )
-        sliderRow(
+        pickerRow(
             titleRes = R.string.settings_morph_blur,
             value = if (settings.morphBlurIndex <= 0) {
                 stringResource(R.string.settings_morph_blur_off)
             } else {
                 "${AppSettings.MORPH_BLUR_CHOICES[settings.morphBlurIndex].toInt()} dp"
             },
-            valueIndex = settings.morphBlurIndex,
-            lastIndex = AppSettings.MORPH_BLUR_CHOICES.lastIndex,
-            onValueChange = onMorphBlurChange,
+            options = AppSettings.MORPH_BLUR_CHOICES.map { blur ->
+                if (blur <= 0f) stringResource(R.string.settings_morph_blur_off) else "${blur.toInt()} dp"
+            },
+            selectedIndex = settings.morphBlurIndex.coerceIn(AppSettings.MORPH_BLUR_CHOICES.indices),
+            onSelect = onMorphBlurChange,
         )
     }
 }
@@ -394,34 +396,101 @@ private fun ColumnScope.switchRow(
     }
 }
 
-/** A title, its current value, and a slider over a fixed set of indices. */
+/** A titled row showing the current choice; tapping it opens an [AlertDialog] of options. */
 @Composable
-private fun ColumnScope.sliderRow(
+private fun ColumnScope.pickerRow(
     titleRes: Int,
     value: String,
-    valueIndex: Int,
-    lastIndex: Int,
-    onValueChange: (Int) -> Unit,
+    options: List<String>,
+    selectedIndex: Int,
+    onSelect: (Int) -> Unit,
 ) {
-    // Drafted during the drag, committed on release: a theme change (or a blur-duration
-    // change) mid-drag would rebuild the screen the slider lives on, every frame.
-    var draft by remember(valueIndex) { mutableStateOf(valueIndex.toFloat()) }
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-        Text(text = stringResource(titleRes), style = MaterialTheme.typography.titleSmall)
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyExtraSmall,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        SteplessSlider(
-            value = draft,
-            valueRange = 0f..lastIndex.toFloat().coerceAtLeast(1f),
-            steps = lastIndex.coerceAtLeast(1),
-            onValueChange = { draft = it },
-            onValueChangeFinished = { onValueChange(draft.roundToInt().coerceIn(0, lastIndex)) },
-            modifier = Modifier.fillMaxWidth(),
+    var showDialog by remember { mutableStateOf(false) }
+    val title = stringResource(titleRes)
+
+    Card(
+        onClick = { showDialog = true },
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodyExtraSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            visible = true,
+            onDismissRequest = { showDialog = false },
+            title = {
+                Text(
+                    text = title,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            content = {
+                itemsIndexed(options) { index, option ->
+                    val selected = index == selectedIndex
+                    Card(
+                        onClick = {
+                            showDialog = false
+                            onSelect(index)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = option,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = if (selected) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (selected) {
+                                Icon(
+                                    imageVector = Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
         )
     }
 }

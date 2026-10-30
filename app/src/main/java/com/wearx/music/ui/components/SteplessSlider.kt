@@ -18,9 +18,10 @@ import androidx.wear.compose.material3.MaterialTheme
  * vertical scrolls, thumb/track animations, press feedback and accessibility, with the colours
  * swapped to the Wear scheme so it still belongs to this app.
  *
- * [steps] is the number of intervals between the ends (same as phone M3): 0 is stepless,
- * `steps = 3` over 0f..1f snaps to 0, 1/3, 2/3, 1. [onValueChangeFinished] fires once per
- * gesture, so callers can commit a setting without rebuilding the type scale on every frame.
+ * [steps] follows Material 3's meaning: the number of snap points BETWEEN the two ends (so a
+ * slider over 0f..1f with `steps = 1` has exactly two snap values). 0 is stepless.
+ * [onValueChangeFinished] fires once per gesture, so callers can commit a setting without
+ * rebuilding the type scale on every frame.
  */
 @Composable
 fun SteplessSlider(
