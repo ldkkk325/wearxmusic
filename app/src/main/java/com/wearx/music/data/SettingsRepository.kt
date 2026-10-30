@@ -78,6 +78,10 @@ data class AppSettings(
      * weight, not a choice among bundled statics.
      */
     val fontWeight: Float = DEFAULT_FONT_WEIGHT,
+    /** Fade the audio in at track start and out at track end. */
+    val playbackFadeEnabled: Boolean = false,
+    /** Index into [FADE_DURATION_CHOICES]. */
+    val playbackFadeDurationIndex: Int = DEFAULT_FADE_DURATION_INDEX,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
@@ -87,6 +91,12 @@ data class AppSettings(
 
         const val DEFAULT_FONT_SCALE = 1f
         const val DEFAULT_FONT_WEIGHT = 400f
+
+        /** How long each fade in/out runs. */
+        val FADE_DURATION_CHOICES = listOf(500, 1_000, 2_000, 3_000)
+        val FADE_DURATION_LABELS = listOf("0.5 秒", "1 秒", "2 秒", "3 秒")
+
+        const val DEFAULT_FADE_DURATION_INDEX = 1
 
         /** Off, then increasingly blurred. Index 0 means "no blur". */
         val MORPH_BLUR_CHOICES = listOf(0f, 3f, 6f, 10f)
@@ -162,6 +172,18 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setPlaybackFadeEnabled(value: Boolean) {
+        prefs.edit().putBoolean(KEY_FADE_ENABLED, value).apply()
+        _settings.value = read()
+    }
+
+    fun setPlaybackFadeDurationIndex(value: Int) {
+        prefs.edit()
+            .putInt(KEY_FADE_DURATION, value.coerceIn(AppSettings.FADE_DURATION_CHOICES.indices))
+            .apply()
+        _settings.value = read()
+    }
+
     fun setTransitionDurationIndex(value: Int) {
         prefs.edit()
             .putInt(KEY_TRANSITION_DURATION, value.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices))
@@ -203,6 +225,9 @@ class SettingsRepository(context: Context) {
             .coerceIn(AppSettings.FONT_SCALE_RANGE),
         fontWeight = prefs.getFloat(KEY_FONT_WEIGHT, AppSettings.DEFAULT_FONT_WEIGHT)
             .coerceIn(AppSettings.FONT_WEIGHT_RANGE),
+        playbackFadeEnabled = prefs.getBoolean(KEY_FADE_ENABLED, false),
+        playbackFadeDurationIndex = prefs.getInt(KEY_FADE_DURATION, AppSettings.DEFAULT_FADE_DURATION_INDEX)
+            .coerceIn(AppSettings.FADE_DURATION_CHOICES.indices),
     )
 
     private companion object {
@@ -217,5 +242,7 @@ class SettingsRepository(context: Context) {
         const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
         const val KEY_FONT_SCALE = "font_scale"
         const val KEY_FONT_WEIGHT = "font_weight"
+        const val KEY_FADE_ENABLED = "fade_enabled"
+        const val KEY_FADE_DURATION = "fade_duration"
     }
 }

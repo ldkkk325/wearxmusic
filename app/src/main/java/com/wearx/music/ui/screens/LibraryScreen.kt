@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.Album
@@ -40,6 +42,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,11 +50,16 @@ import androidx.compose.ui.unit.dp
 import androidx.wear.compose.foundation.lazy.TransformingLazyColumn
 import androidx.wear.compose.foundation.lazy.itemsIndexed
 import androidx.wear.compose.foundation.lazy.rememberTransformingLazyColumnState
+import androidx.wear.compose.foundation.pager.HorizontalPager
+import androidx.wear.compose.foundation.pager.rememberPagerState
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
 import androidx.wear.compose.material3.ButtonGroup
 import androidx.wear.compose.material3.ButtonGroupDefaults
 import androidx.wear.compose.material3.Card
 import androidx.wear.compose.material3.CompactButton
+import androidx.wear.compose.material3.HorizontalPageIndicator
 import androidx.wear.compose.material3.Icon
+import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.SurfaceTransformation
@@ -78,11 +86,14 @@ import com.wearx.music.ui.components.rememberTapFeedback
 import com.wearx.music.util.formatDuration
 
 /**
- * Home screen.
+ * Home screen, as a two-page pager: the library itself, and the tool page (search, volume,
+ * settings) that used to sit in button rows above the list.
  *
- * Tracks are the primary list (and the default tab), each row carrying its own cover. The top bar
- * is deliberately terse: the screen is only ~227 dp tall, so there is no page title and every
- * control is icon-only. With playback running, a now-playing row sits above the tabs.
+ * The library is the page you land on; swiping right — the platform's "previous page"
+ * direction, same gesture as going back — reveals the tools. Tracks are the primary list (and
+ * the default tab), each row carrying its own cover. The top bar is deliberately terse: the
+ * screen is only ~227 dp tall, so there is no page title and every control is icon-only. With
+ * playback running, a now-playing row sits above the tabs.
  */
 @Composable
 fun LibraryScreen(
@@ -99,6 +110,73 @@ fun LibraryScreen(
     onOpenVolume: () -> Unit,
     onOpenSettings: () -> Unit,
     onOpenSearch: () -> Unit,
+    onTogglePlay: () -> Unit,
+    onOpenNowPlaying: () -> Unit,
+    onRescan: () -> Unit,
+) {
+    val pagerState = rememberPagerState(
+        initialPage = LibraryPageIndex,
+        pageCount = { PageCount },
+    )
+
+    Box(Modifier.fillMaxSize()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            // Keep the tools page composed so the first swipe is not a rebuild.
+            beyondViewportPageCount = 1,
+            rotaryScrollableBehavior = RotaryScrollableDefaults.snapBehavior(pagerState),
+        ) { page ->
+            if (page == ToolsPageIndex) {
+                ToolsPage(
+                    onOpenSearch = onOpenSearch,
+                    onOpenVolume = onOpenVolume,
+                    onOpenSettings = onOpenSettings,
+                )
+            } else {
+                LibraryPageContent(
+                    albums = albums,
+                    tracks = tracks,
+                    playback = playback,
+                    artByTrackId = artByTrackId,
+                    isRescanning = isRescanning,
+                    onAlbumClick = onAlbumClick,
+                    onTrackClick = onTrackClick,
+                    onPlayNext = onPlayNext,
+                    sortMode = sortMode,
+                    onCycleSort = onCycleSort,
+                    onTogglePlay = onTogglePlay,
+                    onOpenNowPlaying = onOpenNowPlaying,
+                    onRescan = onRescan,
+                )
+            }
+        }
+
+        HorizontalPageIndicator(
+            pagerState = pagerState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 6.dp),
+        )
+    }
+}
+
+private const val ToolsPageIndex = 0
+private const val LibraryPageIndex = 1
+private const val PageCount = 2
+
+@Composable
+private fun LibraryPageContent(
+    albums: List<Album>,
+    tracks: List<Track>,
+    playback: PlayerUiState,
+    artByTrackId: Map<Long, Uri?>,
+    isRescanning: Boolean,
+    onAlbumClick: (Album) -> Unit,
+    onTrackClick: (Track) -> Unit,
+    onPlayNext: (Track) -> Unit,
+    sortMode: SortMode,
+    onCycleSort: () -> Unit,
     onTogglePlay: () -> Unit,
     onOpenNowPlaying: () -> Unit,
     onRescan: () -> Unit,
@@ -131,8 +209,8 @@ fun LibraryScreen(
             // Two rows, because these are two different kinds of control squeezed into one. Five
             // across a 227 dp dial is ~42 dp per button, under the 48 dp Wear asks for, and the row
             // mixed a view-mode toggle (one of which is ALWAYS active) with three plain navigation
-            // buttons (none of which ever is). Splitting them gives every button ~72 dp or more, and
-            // each row now says one thing.
+            // buttons (none of which ever is). The navigation trio now lives on the tools page
+            // (swipe right); this row is the view controls alone.
             item {
                 ButtonGroup(
                     modifier = Modifier.fillMaxWidth(),
@@ -167,41 +245,6 @@ fun LibraryScreen(
                             Icon(
                                 imageVector = sortMode.icon,
                                 contentDescription = stringResource(sortMode.labelRes),
-                            )
-                        },
-                    )
-                }
-            }
-
-            item {
-                ButtonGroup(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = ButtonGroupDefaults.fullWidthPaddings(),
-                ) {
-                    MorphGroupIconButton(
-                        onClick = onOpenSearch,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Search,
-                                contentDescription = stringResource(R.string.nav_search),
-                            )
-                        },
-                    )
-                    MorphGroupIconButton(
-                        onClick = onOpenVolume,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.VolumeUp,
-                                contentDescription = stringResource(R.string.nav_volume),
-                            )
-                        },
-                    )
-                    MorphGroupIconButton(
-                        onClick = onOpenSettings,
-                        icon = {
-                            Icon(
-                                imageVector = Icons.Filled.Settings,
-                                contentDescription = stringResource(R.string.nav_settings),
                             )
                         },
                     )
@@ -268,6 +311,114 @@ fun LibraryScreen(
             }
 
             item { Spacer(Modifier.height(18.dp)) }
+        }
+    }
+}
+
+/**
+ * The tools page: search, volume and settings, as the same action rows the settings index uses.
+ * Home stays a pure library; this is the page the right-swipe reveals.
+ */
+@Composable
+private fun ToolsPage(
+    onOpenSearch: () -> Unit,
+    onOpenVolume: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    val scrollState = rememberTransformingLazyColumnState()
+    val transformationSpec = rememberTransformationSpec()
+
+    ScreenScaffold(scrollState = scrollState) { padding ->
+        TransformingLazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            state = scrollState,
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            contentPadding = padding,
+        ) {
+            item {
+                ListHeader {
+                    Text(
+                        text = stringResource(R.string.tools_title),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+            }
+            item {
+                ToolRow(
+                    icon = Icons.Filled.Search,
+                    label = stringResource(R.string.nav_search),
+                    onClick = onOpenSearch,
+                    transformation = SurfaceTransformation(transformationSpec),
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                )
+            }
+            item {
+                ToolRow(
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
+                    label = stringResource(R.string.nav_volume),
+                    onClick = onOpenVolume,
+                    transformation = SurfaceTransformation(transformationSpec),
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                )
+            }
+            item {
+                ToolRow(
+                    icon = Icons.Filled.Settings,
+                    label = stringResource(R.string.nav_settings),
+                    onClick = onOpenSettings,
+                    transformation = SurfaceTransformation(transformationSpec),
+                    modifier = Modifier.transformedHeight(this, transformationSpec),
+                )
+            }
+            item { Spacer(Modifier.height(18.dp)) }
+        }
+    }
+}
+
+/** One action row: icon, label, chevron — the settings index's row shape. */
+@Composable
+private fun ToolRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    transformation: SurfaceTransformation,
+    modifier: Modifier = Modifier,
+) {
+    val tapFeedback = rememberTapFeedback()
+    Card(
+        onClick = {
+            tapFeedback()
+            onClick()
+        },
+        modifier = modifier.fillMaxWidth(),
+        transformation = transformation,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }

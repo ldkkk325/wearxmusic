@@ -87,6 +87,8 @@ fun SettingsSectionScreen(
     onThemeModeChange: (ThemeMode) -> Unit,
     onFontScaleChange: (Float) -> Unit,
     onFontWeightChange: (Float) -> Unit,
+    onFadeEnabledChange: (Boolean) -> Unit,
+    onFadeDurationChange: (Int) -> Unit,
     onBack: () -> Unit,
 ) {
     val scrollState = rememberTransformingLazyColumnState()
@@ -131,8 +133,11 @@ fun SettingsSectionScreen(
 
                 SettingsSection.PLAYBACK -> playbackSection(
                     transformationSpec = transformationSpec,
+                    settings = settings,
                     isRescanning = isRescanning,
                     onRescan = onRescan,
+                    onFadeEnabledChange = onFadeEnabledChange,
+                    onFadeDurationChange = onFadeDurationChange,
                 )
                 SettingsSection.ABOUT -> aboutSection(transformationSpec, settings, versionName)
             }
@@ -253,14 +258,36 @@ private fun TransformingLazyColumnScope.motionSection(
 /**
  * Library scanning lives here rather than only behind the empty state: once a library has any
  * song at all, the old empty-state button was the only rescan entry point — and new files could
- * never be picked up without wiping app data.
+ * never be picked up without wiping app data. The fade is the one playback behaviour that is
+ * genuinely configurable, so it gets the section's other slots.
  */
 private fun TransformingLazyColumnScope.playbackSection(
     transformationSpec: TransformationSpec,
+    settings: AppSettings,
     isRescanning: Boolean,
     onRescan: () -> Unit,
+    onFadeEnabledChange: (Boolean) -> Unit,
+    onFadeDurationChange: (Int) -> Unit,
 ) {
     group(transformationSpec) {
+        switchRow(
+            titleRes = R.string.settings_fade,
+            checked = settings.playbackFadeEnabled,
+            onCheckedChange = onFadeEnabledChange,
+        )
+        if (settings.playbackFadeEnabled) {
+            pickerRow(
+                titleRes = R.string.settings_fade_duration,
+                value = AppSettings.FADE_DURATION_LABELS[
+                    settings.playbackFadeDurationIndex
+                        .coerceIn(AppSettings.FADE_DURATION_LABELS.indices)
+                ],
+                options = AppSettings.FADE_DURATION_LABELS,
+                selectedIndex = settings.playbackFadeDurationIndex
+                    .coerceIn(AppSettings.FADE_DURATION_LABELS.indices),
+                onSelect = onFadeDurationChange,
+            )
+        }
         MorphButton(
             onClick = onRescan,
             modifier = Modifier.fillMaxWidth(),

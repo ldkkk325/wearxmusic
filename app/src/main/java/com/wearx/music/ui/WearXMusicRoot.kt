@@ -509,6 +509,8 @@ fun WearXMusicRoot() {
                             onThemeModeChange = app.settings::setThemeMode,
                             onFontScaleChange = app.settings::setFontScale,
                             onFontWeightChange = app.settings::setFontWeight,
+                            onFadeEnabledChange = app.settings::setPlaybackFadeEnabled,
+                            onFadeDurationChange = app.settings::setPlaybackFadeDurationIndex,
                             onBack = { commitBack() },
                         )
                 }

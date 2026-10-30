@@ -13,6 +13,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.wearx.music.MainActivity
+import com.wearx.music.WearXMusicApp
+import com.wearx.music.data.AppSettings
 
 /**
  * Hosts the single [ExoPlayer] instance behind a [MediaSession].
@@ -39,6 +41,16 @@ class PlaybackService : MediaSessionService() {
     private val persistCursor = Runnable {
         mediaSession?.player?.let(queueStore::saveCursor)
         scheduleCursorPersist()
+    }
+
+    /**
+     * The fade in/out play head. ExoPlayer has no crossfade, but a volume ramp driven from the
+     * position is exactly "播放淡入淡出": 0→full over the first moments of a track, full→0 over
+     * the last, each running for the configured duration. Ticked only while playing.
+     */
+    private val fadeTick = Runnable {
+        applyPlaybackFade()
+        scheduleFadeTick()
     }
 
     override fun onCreate() {
@@ -122,10 +134,15 @@ class PlaybackService : MediaSessionService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             handler.removeCallbacks(persistCursor)
+            handler.removeCallbacks(fadeTick)
             if (isPlaying) {
                 scheduleCursorPersist()
+                scheduleFadeTick()
             } else {
                 store.saveCursor(player)
+                // Leaving a fade half-way would resume at the wrong level; the next play fades
+                // in from zero anyway.
+                player.volume = 1f
             }
         }
     }
@@ -133,6 +150,36 @@ class PlaybackService : MediaSessionService() {
     private fun scheduleCursorPersist() {
         handler.removeCallbacks(persistCursor)
         handler.postDelayed(persistCursor, CURSOR_SAVE_INTERVAL_MS)
+    }
+
+    private fun scheduleFadeTick() {
+        handler.removeCallbacks(fadeTick)
+        handler.postDelayed(fadeTick, FADE_TICK_INTERVAL_MS)
+    }
+
+    /** Maps the play head onto a volume ramp; no-op at full level when the fade is off. */
+    private fun applyPlaybackFade() {
+        val player = mediaSession?.player ?: return
+        val settings = (application as WearXMusicApp).settings.settings.value
+        if (!settings.playbackFadeEnabled) {
+            if (player.volume != 1f) player.volume = 1f
+            return
+        }
+        val duration = player.duration
+        if (duration == C.TIME_UNSET || duration <= 0L) {
+            player.volume = 1f
+            return
+        }
+        val fadeMs = AppSettings.FADE_DURATION_CHOICES[
+            settings.playbackFadeDurationIndex.coerceIn(AppSettings.FADE_DURATION_CHOICES.indices)
+        ].toFloat()
+        val position = player.currentPosition
+        val volume = when {
+            position < fadeMs -> position / fadeMs
+            duration - position < fadeMs -> (duration - position) / fadeMs
+            else -> 1f
+        }
+        player.volume = volume.coerceIn(0f, 1f)
     }
 
     /** Tapping the media notification re-opens the watch UI. */
@@ -154,5 +201,8 @@ class PlaybackService : MediaSessionService() {
          * cheaper to re-listen to than the disk traffic of saving more often on a watch.
          */
         const val CURSOR_SAVE_INTERVAL_MS = 5_000L
+
+        /** The fade ramp is sampled at 20 Hz — smooth to the ear, cheap to tick. */
+        const val FADE_TICK_INTERVAL_MS = 50L
     }
 }
