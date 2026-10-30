@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -32,7 +33,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +72,7 @@ private const val FlipHalfTurn = 90f
 private val TransportHorizontalPadding = 20.dp
 private val TransportSpacing = 12.dp
 private val SideButtonMinSize = 44.dp
+private val SideButtonFloor = 56.dp
 private val SideIconSize = 24.dp
 private val PlayButtonSize = 64.dp
 
@@ -200,6 +201,9 @@ private fun PlayerPage(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier
                     .fillMaxWidth()
+                    // Clear of the round face's curve: full-width text at the top of a 450×450
+                    // dial ran into the circle and read as clipped.
+                    .padding(horizontal = 20.dp)
                     .graphicsLayer {
                         rotationY = if (reduceMotion) 0f else flip.value
                         cameraDistance = 16f * density
@@ -309,60 +313,62 @@ private fun TransportRow(
         onPrimary = scheme.onPrimaryContainer,
     )
 
-    // Horologist sizes the middle button by screen class (80 dp past a 224 dp height) and builds
-    // its wavy progress path at that size — so the box has to match or the wave gets cropped on a
-    // 450×450 dial, which reads as exactly the "squeezed" glitch. The sides take whatever width
-    // is left, so the row always fits the dial instead of overflowing it.
-    val middleSize = ButtonGroupLayoutDefaults.middleButtonSize
-    val sideSize = (
-        LocalConfiguration.current.screenWidthDp.dp -
-            TransportHorizontalPadding -
-            TransportSpacing * 2 -
-            middleSize
-        ) / 2
+    // Measure the REAL width, not the configuration's guess: ScreenScaffold insets shrink the
+    // row below `screenWidthDp`, and a row sized from the configuration overflows on a round
+    // 450×450 dial — the circle then clips the side buttons, which is the "squeezed" glitch.
+    // If the sides would fall under 44 dp, the middle gives ground first; the row never overflows.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val usable = maxWidth - TransportHorizontalPadding
+        val spacingTotal = TransportSpacing * 2
+        var middleSize = ButtonGroupLayoutDefaults.middleButtonSize
+        if ((usable - spacingTotal - middleSize) / 2 < SideButtonMinSize) {
+            middleSize = (usable - spacingTotal - SideButtonMinSize * 2).coerceAtLeast(SideButtonFloor)
+        }
+        val sideSize = ((usable - spacingTotal - middleSize) / 2).coerceAtLeast(SideButtonMinSize)
 
-    // The buttons' own morph animation is the feedback; the stock ripple fought it.
-    CompositionLocalProvider(LocalRippleConfiguration provides null) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(TransportSpacing, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SeekButton(
-                icon = Icons.Filled.SkipPrevious,
-                contentDescription = stringResource(R.string.action_previous),
-                enabled = state.hasPrevious,
-                onClick = onPrevious,
-                modifier = Modifier.size(sideSize.coerceAtLeast(SideButtonMinSize)),
-            )
+        // The buttons' own morph animation is the feedback; the stock ripple fought it.
+        CompositionLocalProvider(LocalRippleConfiguration provides null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(TransportSpacing, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                SeekButton(
+                    icon = Icons.Filled.SkipPrevious,
+                    contentDescription = stringResource(R.string.action_previous),
+                    enabled = state.hasPrevious,
+                    onClick = onPrevious,
+                    modifier = Modifier.size(sideSize),
+                )
 
-            MaterialTheme(colorScheme = playScheme) {
-                AnimatedPlayPauseProgressButton(
-                    onPlayClick = {
-                        tapFeedback()
-                        onPlayPause()
-                    },
-                    onPauseClick = {
-                        tapFeedback()
-                        onPlayPause()
-                    },
-                    playing = state.isPlaying,
-                    trackPositionUiModel = trackPosition,
-                    modifier = Modifier.size(middleSize),
-                    interactionSource = playSource,
-                    isAnyButtonPressed = playOwnPressed,
+                MaterialTheme(colorScheme = playScheme) {
+                    AnimatedPlayPauseProgressButton(
+                        onPlayClick = {
+                            tapFeedback()
+                            onPlayPause()
+                        },
+                        onPauseClick = {
+                            tapFeedback()
+                            onPlayPause()
+                        },
+                        playing = state.isPlaying,
+                        trackPositionUiModel = trackPosition,
+                        modifier = Modifier.size(middleSize),
+                        interactionSource = playSource,
+                        isAnyButtonPressed = playOwnPressed,
+                    )
+                }
+
+                SeekButton(
+                    icon = Icons.Filled.SkipNext,
+                    contentDescription = stringResource(R.string.action_next),
+                    enabled = state.hasNext,
+                    onClick = onNext,
+                    modifier = Modifier.size(sideSize),
                 )
             }
-
-            SeekButton(
-                icon = Icons.Filled.SkipNext,
-                contentDescription = stringResource(R.string.action_next),
-                enabled = state.hasNext,
-                onClick = onNext,
-                modifier = Modifier.size(sideSize.coerceAtLeast(SideButtonMinSize)),
-            )
         }
     }
 }
