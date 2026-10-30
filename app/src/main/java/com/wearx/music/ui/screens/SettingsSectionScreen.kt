@@ -89,6 +89,7 @@ fun SettingsSectionScreen(
     onFontWeightChange: (Float) -> Unit,
     onFadeEnabledChange: (Boolean) -> Unit,
     onFadeDurationChange: (Int) -> Unit,
+    onLyricsBlurChange: (Float) -> Unit,
     onBack: () -> Unit,
 ) {
     val scrollState = rememberTransformingLazyColumnState()
@@ -129,6 +130,7 @@ fun SettingsSectionScreen(
                     onReduceMotionChange = onReduceMotionChange,
                     onTransitionDurationChange = onTransitionDurationChange,
                     onMorphBlurChange = onMorphBlurChange,
+                    onLyricsBlurChange = onLyricsBlurChange,
                 )
 
                 SettingsSection.PLAYBACK -> playbackSection(
@@ -222,6 +224,7 @@ private fun TransformingLazyColumnScope.motionSection(
     onReduceMotionChange: (Boolean) -> Unit,
     onTransitionDurationChange: (Int) -> Unit,
     onMorphBlurChange: (Int) -> Unit,
+    onLyricsBlurChange: (Float) -> Unit,
 ) {
     group(transformationSpec) {
         switchRow(
@@ -251,6 +254,17 @@ private fun TransformingLazyColumnScope.motionSection(
             },
             selectedIndex = settings.morphBlurIndex.coerceIn(AppSettings.MORPH_BLUR_CHOICES.indices),
             onSelect = onMorphBlurChange,
+        )
+        continuousSliderRow(
+            titleRes = R.string.settings_lyrics_blur,
+            value = if (settings.lyricsBlurRadius <= 0f) {
+                stringResource(R.string.settings_morph_blur_off)
+            } else {
+                "${"%.1f".format(settings.lyricsBlurRadius)} dp"
+            },
+            currentValue = settings.lyricsBlurRadius,
+            range = AppSettings.LYRICS_BLUR_RADIUS_RANGE,
+            onValueChange = onLyricsBlurChange,
         )
     }
 }

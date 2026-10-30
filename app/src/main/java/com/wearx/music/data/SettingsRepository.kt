@@ -82,6 +82,11 @@ data class AppSettings(
     val playbackFadeEnabled: Boolean = false,
     /** Index into [FADE_DURATION_CHOICES]. */
     val playbackFadeDurationIndex: Int = DEFAULT_FADE_DURATION_INDEX,
+    /**
+     * How blurry the far lyric lines are, in dp — the cap of the ramp away from the active line.
+     * 0 turns the blur off entirely.
+     */
+    val lyricsBlurRadius: Float = DEFAULT_LYRICS_BLUR_RADIUS,
 ) {
     companion object {
         val UI_SCALE_CHOICES = listOf(0.85f, 1f, 1.15f, 1.3f)
@@ -97,6 +102,10 @@ data class AppSettings(
         val FADE_DURATION_LABELS = listOf("0.5 秒", "1 秒", "2 秒", "3 秒")
 
         const val DEFAULT_FADE_DURATION_INDEX = 1
+
+        /** 0 (off) through 6 dp; the old fixed ramp topped out at 3 × 1.2 = 3.6 dp. */
+        val LYRICS_BLUR_RADIUS_RANGE = 0f..6f
+        const val DEFAULT_LYRICS_BLUR_RADIUS = 3.6f
 
         /** Off, then increasingly blurred. Index 0 means "no blur". */
         val MORPH_BLUR_CHOICES = listOf(0f, 3f, 6f, 10f)
@@ -184,6 +193,13 @@ class SettingsRepository(context: Context) {
         _settings.value = read()
     }
 
+    fun setLyricsBlurRadius(value: Float) {
+        prefs.edit()
+            .putFloat(KEY_LYRICS_BLUR, value.coerceIn(AppSettings.LYRICS_BLUR_RADIUS_RANGE))
+            .apply()
+        _settings.value = read()
+    }
+
     fun setTransitionDurationIndex(value: Int) {
         prefs.edit()
             .putInt(KEY_TRANSITION_DURATION, value.coerceIn(AppSettings.TRANSITION_DURATION_CHOICES.indices))
@@ -228,6 +244,8 @@ class SettingsRepository(context: Context) {
         playbackFadeEnabled = prefs.getBoolean(KEY_FADE_ENABLED, false),
         playbackFadeDurationIndex = prefs.getInt(KEY_FADE_DURATION, AppSettings.DEFAULT_FADE_DURATION_INDEX)
             .coerceIn(AppSettings.FADE_DURATION_CHOICES.indices),
+        lyricsBlurRadius = prefs.getFloat(KEY_LYRICS_BLUR, AppSettings.DEFAULT_LYRICS_BLUR_RADIUS)
+            .coerceIn(AppSettings.LYRICS_BLUR_RADIUS_RANGE),
     )
 
     private companion object {
@@ -244,5 +262,6 @@ class SettingsRepository(context: Context) {
         const val KEY_FONT_WEIGHT = "font_weight"
         const val KEY_FADE_ENABLED = "fade_enabled"
         const val KEY_FADE_DURATION = "fade_duration"
+        const val KEY_LYRICS_BLUR = "lyrics_blur"
     }
 }

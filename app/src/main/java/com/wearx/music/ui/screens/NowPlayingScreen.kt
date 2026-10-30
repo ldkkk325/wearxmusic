@@ -90,6 +90,7 @@ fun NowPlayingScreen(
     lyrics: Lyrics,
     lyricsLoading: Boolean,
     reduceMotion: Boolean,
+    lyricsBlurRadius: Float,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
@@ -143,6 +144,7 @@ fun NowPlayingScreen(
                     isLoading = lyricsLoading,
                     positionMs = position.positionMs,
                     trackTitle = state.title,
+                    blurRadius = lyricsBlurRadius,
                 )
             }
         }
@@ -293,6 +295,7 @@ private fun TransportRow(
     val playSource = remember { MutableInteractionSource() }
     val playPressed by playSource.collectIsPressedAsState()
     val playOwnPressed = remember { derivedStateOf { playPressed } }
+    val tapFeedback = rememberTapFeedback()
 
     // Horologist derives the middle button's face from the scheme's primary, which reads as alien
     // next to this app's controls. Nudging the scheme just for that call moves it onto
@@ -323,8 +326,14 @@ private fun TransportRow(
 
             MaterialTheme(colorScheme = playScheme) {
                 AnimatedPlayPauseProgressButton(
-                    onPlayClick = onPlayPause,
-                    onPauseClick = onPlayPause,
+                    onPlayClick = {
+                        tapFeedback()
+                        onPlayPause()
+                    },
+                    onPauseClick = {
+                        tapFeedback()
+                        onPlayPause()
+                    },
                     playing = state.isPlaying,
                     trackPositionUiModel = trackPosition,
                     modifier = Modifier.size(PlayRingSize),

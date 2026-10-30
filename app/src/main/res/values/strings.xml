@@ -120,6 +120,8 @@
     <string name="settings_morph_blur">背景模糊</string>
     <string name="settings_morph_blur_hint">新页面长出来时，下方页面渐渐失焦</string>
     <string name="settings_morph_blur_off">关闭</string>
+    <string name="settings_lyrics_blur">歌词模糊半径</string>
+    <string name="settings_lyrics_blur_hint">离正在唱的行越远越模糊，调到 0 即关闭</string>
     <string name="settings_state_on">当前：开</string>
     <string name="settings_state_off">当前：关</string>
     <string name="settings_switch_on">开启</string>

@@ -463,6 +463,7 @@ fun WearXMusicRoot() {
                             lyrics = lyrics,
                             lyricsLoading = lyricsLoading,
                             reduceMotion = settings.reduceMotion,
+                            lyricsBlurRadius = settings.lyricsBlurRadius,
                             onPlayPause = playerViewModel::playPause,
                             onNext = playerViewModel::next,
                             onPrevious = playerViewModel::previous,
@@ -512,6 +513,7 @@ fun WearXMusicRoot() {
                             onFontWeightChange = app.settings::setFontWeight,
                             onFadeEnabledChange = app.settings::setPlaybackFadeEnabled,
                             onFadeDurationChange = app.settings::setPlaybackFadeDurationIndex,
+                            onLyricsBlurChange = app.settings::setLyricsBlurRadius,
                             onBack = { commitBack() },
                         )
                 }
