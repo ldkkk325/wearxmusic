@@ -1,22 +1,14 @@
 package com.wearx.music.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,18 +19,19 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -47,14 +40,17 @@ import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 import androidx.wear.compose.foundation.pager.HorizontalPager
 import androidx.wear.compose.foundation.pager.rememberPagerState
 import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
-import androidx.wear.compose.material3.Button
 import androidx.wear.compose.material3.ButtonDefaults
 import androidx.wear.compose.material3.CompactButton
 import androidx.wear.compose.material3.HorizontalPageIndicator
 import androidx.wear.compose.material3.Icon
+import androidx.wear.compose.material3.LocalRippleConfiguration
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScreenScaffold
 import androidx.wear.compose.material3.Text
+import com.google.android.horologist.annotations.ExperimentalHorologistApi
+import com.google.android.horologist.media.ui.material3.components.animated.AnimatedPlayPauseProgressButton
+import com.google.android.horologist.media.ui.state.model.TrackPositionUiModel
 import com.wearx.music.R
 import com.wearx.music.data.Lyrics
 import com.wearx.music.playback.PlaybackInterruption
@@ -63,16 +59,18 @@ import com.wearx.music.playback.PlayerUiState
 import com.wearx.music.ui.components.ArtworkBackdrop
 import com.wearx.music.ui.components.MarqueeText
 import com.wearx.music.ui.components.NavigationRow
-import com.wearx.music.ui.components.WaveProgressRing
-import com.wearx.music.ui.components.rememberBurstShape
-import com.wearx.music.ui.components.rememberPressScale
+import com.wearx.music.ui.components.rememberPressShape
 import com.wearx.music.ui.components.rememberTapFeedback
 import com.wearx.music.util.formatDuration
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val FlipHalfTurn = 90f
+
 private val PlayRingSize = 72.dp
-private val PlayButtonSize = 52.dp
+private val SideButtonSize = 52.dp
+private val SideIconSize = 24.dp
+private val PlayButtonSize = 64.dp
 
 private const val PlayerPageIndex = 0
 private const val PageCount = 2
@@ -252,7 +250,7 @@ private fun PlayerPage(
                 }
             }
 
-            TransportRow(state, position, reduceMotion, onPrevious, onPlayPause, onNext)
+            TransportRow(state, position, onPrevious, onPlayPause, onNext)
 
             NavigationRow(
                 onOpenVolume = onOpenVolume,
@@ -267,117 +265,112 @@ private fun PlayerPage(
 }
 
 /**
- * Transport row: a plain [Row] rather than a [ButtonGroup], because the middle slot has to host the
- * wave progress ring *around* the play button and a ButtonGroup child cannot be oversized.
+ * Transport row: Horologist's animated middle button (play/pause morph over the rotating wavy
+ * progress indicator) flanked by the app's own press-morph seek buttons.
+ *
+ * The seek buttons use the same [rememberPressShape] morph as every other button in the app —
+ * pressing a side key deforms THAT key. Horologist's Lottie seek buttons instead bulge the
+ * middle scallop on any press, which reads as the wrong button reacting. Explicit sizes keep
+ * the side buttons from being squeezed away (ButtonGroupLayout could do exactly that), and the
+ * colours stay mapped onto the app's tonal roles.
  */
+@OptIn(ExperimentalHorologistApi::class)
 @Composable
 private fun TransportRow(
     state: PlayerUiState,
     position: PlayerPosition,
-    reduceMotion: Boolean,
     onPrevious: () -> Unit,
     onPlayPause: () -> Unit,
     onNext: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        val previousSource = remember { MutableInteractionSource() }
-        CompactButton(
-            onClick = onPrevious,
-            enabled = state.hasPrevious,
-            colors = ButtonDefaults.filledTonalButtonColors(),
-            interactionSource = previousSource,
-            icon = {
-                Icon(
-                    imageVector = Icons.Filled.SkipPrevious,
-                    contentDescription = stringResource(R.string.action_previous),
-                )
-            },
-        )
+    val trackPosition = TrackPositionUiModel.Actual(
+        percent = position.progressFraction,
+        duration = position.durationMs.milliseconds,
+        position = position.positionMs.milliseconds,
+    )
 
-        val playSource = remember { MutableInteractionSource() }
-        val tapFeedback = rememberTapFeedback()
-        // The play button's outline is owned by the burst morph, so its press feedback is a scale
-        // rather than the corner morph the other buttons use.
-        val burstShape = rememberBurstShape(state.isPlaying)
-        val pressScale = rememberPressScale(playSource)
-        // The button turns with the ring: the play head's angle, chased smoothly so the 4 Hz
-        // position polls read as continuous rotation rather than steps.
-        val rotation by animateFloatAsState(
-            targetValue = position.progressFraction * 360f,
-            animationSpec = tween(durationMillis = 280, easing = LinearEasing),
-            label = "playButtonRotation",
-        )
+    // The middle scallop only reacts to its OWN button now — the side keys have their own morph.
+    val playSource = remember { MutableInteractionSource() }
+    val playPressed by playSource.collectIsPressedAsState()
+    val playOwnPressed = remember { derivedStateOf { playPressed } }
 
-        Box(
-            modifier = Modifier.size(PlayRingSize),
-            contentAlignment = Alignment.Center,
+    // Horologist derives the middle button's face from the scheme's primary, which reads as alien
+    // next to this app's controls. Nudging the scheme just for that call moves it onto
+    // primaryContainer — the same family as MorphButton — while the rotating indicator keeps
+    // reading onSecondaryContainer / surfaceContainerLow, which are untouched.
+    val scheme = MaterialTheme.colorScheme
+    val playScheme = scheme.copy(
+        primary = scheme.primaryContainer,
+        onPrimary = scheme.onPrimaryContainer,
+    )
+
+    // The buttons' own morph animation is the feedback; the stock ripple fought it.
+    CompositionLocalProvider(LocalRippleConfiguration provides null) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            WaveProgressRing(
-                progress = position.progressFraction,
-                waving = state.isPlaying && !reduceMotion,
-                modifier = Modifier.size(PlayRingSize),
-                strokeWidth = 4.dp,
-                waveAmplitude = 2.dp,
-                waveCount = 7,
+            SeekButton(
+                icon = Icons.Filled.SkipPrevious,
+                contentDescription = stringResource(R.string.action_previous),
+                enabled = state.hasPrevious,
+                onClick = onPrevious,
+                modifier = Modifier.size(SideButtonSize),
             )
-            Button(
-                onClick = {
-                    tapFeedback()
-                    onPlayPause()
-                },
-                modifier = Modifier
-                    .size(PlayButtonSize)
-                    .graphicsLayer {
-                        scaleX = pressScale
-                        scaleY = pressScale
-                        rotationZ = rotation
-                    },
-                shape = burstShape,
-                colors = ButtonDefaults.buttonColors(),
-                contentPadding = PaddingValues(0.dp),
-                interactionSource = playSource,
-                content = {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        AnimatedContent(
-                            targetState = state.isPlaying,
-                            transitionSpec = {
-                                (scaleIn(initialScale = 0.5f) + fadeIn()) togetherWith
-                                    (scaleOut(targetScale = 0.5f) + fadeOut())
-                            },
-                            label = "playPauseIcon",
-                        ) { playing ->
-                            Icon(
-                                imageVector = if (playing) {
-                                    Icons.Filled.Pause
-                                } else {
-                                    Icons.Filled.PlayArrow
-                                },
-                                contentDescription = stringResource(
-                                    if (playing) R.string.action_pause else R.string.action_play,
-                                ),
-                            )
-                        }
-                    }
-                },
+
+            MaterialTheme(colorScheme = playScheme) {
+                AnimatedPlayPauseProgressButton(
+                    onPlayClick = onPlayPause,
+                    onPauseClick = onPlayPause,
+                    playing = state.isPlaying,
+                    trackPositionUiModel = trackPosition,
+                    modifier = Modifier.size(PlayRingSize),
+                    interactionSource = playSource,
+                    isAnyButtonPressed = playOwnPressed,
+                )
+            }
+
+            SeekButton(
+                icon = Icons.Filled.SkipNext,
+                contentDescription = stringResource(R.string.action_next),
+                enabled = state.hasNext,
+                onClick = onNext,
+                modifier = Modifier.size(SideButtonSize),
             )
         }
-
-        val nextSource = remember { MutableInteractionSource() }
-        CompactButton(
-            onClick = onNext,
-            enabled = state.hasNext,
-            colors = ButtonDefaults.filledTonalButtonColors(),
-            interactionSource = nextSource,
-            icon = {
-                Icon(
-                    imageVector = Icons.Filled.SkipNext,
-                    contentDescription = stringResource(R.string.action_next),
-                )
-            },
-        )
     }
+}
+
+/** A side seek button with the app's press morph — pill at rest, squircle while held. */
+@Composable
+private fun SeekButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val tapFeedback = rememberTapFeedback()
+    CompactButton(
+        onClick = {
+            tapFeedback()
+            onClick()
+        },
+        enabled = enabled,
+        modifier = modifier,
+        shape = rememberPressShape(interactionSource),
+        colors = ButtonDefaults.filledTonalButtonColors(),
+        interactionSource = interactionSource,
+        icon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                modifier = Modifier.size(SideIconSize),
+            )
+        },
+    )
 }

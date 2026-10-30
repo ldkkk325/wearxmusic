@@ -16,6 +16,26 @@ val keystoreProperties = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }
 
+/**
+ * Two version numbers, one scheme:
+ *
+ *  - versionCode starts at 10000 and goes up by one per commit (build-time git count, no manual
+ *    bumps);
+ *  - versionName is the human one, "1.0.x", its patch following the same commit count.
+ *
+ * The baseline is the commit count when this scheme landed, so the first build with it is
+ * exactly 10000 / 1.0.1 and each commit adds one. Builds outside a git checkout fall back to
+ * the baseline itself.
+ */
+val baselineCommitCount = 32
+val gitCommitCount = runCatching {
+    providers.exec {
+        commandLine("git", "rev-list", "--count", "HEAD")
+    }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(baselineCommitCount)
+val computedVersionCode = (10000 + gitCommitCount - baselineCommitCount).coerceAtLeast(10_000)
+val computedVersionName = "1.0.${(gitCommitCount - baselineCommitCount).coerceAtLeast(1)}"
+
 android {
     namespace = "com.wearx.music"
     compileSdk = 37
@@ -24,8 +44,8 @@ android {
         applicationId = "com.wearx.music"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = computedVersionCode
+        versionName = computedVersionName
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -108,6 +128,8 @@ dependencies {
 
     implementation(libs.androidx.palette.ktx)
     implementation(libs.material.components)
+
+    implementation(libs.horologist.media.ui)
 
     implementation(libs.kotlinx.coroutines.android)
 
